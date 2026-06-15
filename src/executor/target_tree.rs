@@ -96,6 +96,26 @@ fn is_denied(name: &str) -> bool {
     false
 }
 
+/// Caminhos relativos (a partir da raiz do engine source) que devem ser
+/// totalmente excluídos da cópia para o target. Diferente de [`COPY_DENYLIST`]
+/// — que filtra por *nome* de arquivo/diretório em qualquer profundidade —
+/// esta lista compara o caminho relativo inteiro.
+///
+/// O caso de uso é `packages/kryonix-installer/`: source do próprio
+/// installer dentro do motor. Ele é ferramenta de provisionamento, não
+/// componente do produto final, e estava vazando para
+/// `/mnt/etc/kryonixos/engine/packages/kryonix-installer/`. A externalização
+/// do installer para repo próprio (`github:RAGton/kryonix-installer`)
+/// resolve o problema na fonte; esta denylist é a defesa em profundidade
+/// para o caso de o fallback continuar presente no source do motor.
+const COPY_DENYLIST_RELATIVE_PATHS: &[&str] = &["packages/kryonix-installer"];
+
+fn is_denied_relative(rel: &Path) -> bool {
+    COPY_DENYLIST_RELATIVE_PATHS
+        .iter()
+        .any(|p| rel == Path::new(p))
+}
+
 /// Resolve o source do engine a partir de `KRYONIX_ENGINE_SOURCE`.
 fn engine_source() -> Result<PathBuf, String> {
     let raw = std::env::var("KRYONIX_ENGINE_SOURCE").unwrap_or_else(|_| "/etc/kryonix".to_string());
@@ -227,11 +247,23 @@ async fn copy_engine(src: &Path, dst: &Path) -> Result<(), String> {
     // reactor. A árvore do engine é da ordem de centenas de MB mas sem I/O
     // remoto, então spawn_blocking é mais simples que async em árvore.
     tokio::task::spawn_blocking(move || -> Result<(), String> {
+        // Clone para a closure de filter_entry, que precisa resolver caminhos
+        // relativos contra a raiz do source para checar `is_denied_relative`.
+        let src_for_filter = src.clone();
         for entry in WalkDir::new(&src)
             .follow_links(false)
             .into_iter()
-            .filter_entry(|e| {
-                e.depth() == 0 || !is_denied(e.file_name().to_string_lossy().as_ref())
+            .filter_entry(move |e| {
+                if e.depth() == 0 {
+                    return true;
+                }
+                if is_denied(e.file_name().to_string_lossy().as_ref()) {
+                    return false;
+                }
+                match e.path().strip_prefix(&src_for_filter) {
+                    Ok(rel) => !is_denied_relative(rel),
+                    Err(_) => true,
+                }
             })
         {
             let entry = entry.map_err(|e| format!("walkdir: {e}"))?;
@@ -844,6 +876,91 @@ mod tests {
         for name in ["flake.nix", "modules", "hosts", "lib"] {
             assert!(!is_denied(name), "{name} não deveria ser negado");
         }
+    }
+
+    #[test]
+    fn relative_denylist_blocks_internal_installer_source() {
+        assert!(
+            is_denied_relative(Path::new("packages/kryonix-installer")),
+            "packages/kryonix-installer deve ser negado pela denylist relativa"
+        );
+        // A denylist relativa bate o caminho exato; sub-paths não precisam ser
+        // testados porque walkdir.filter_entry corta a subárvore inteira quando
+        // o root é negado.
+        assert!(
+            !is_denied_relative(Path::new("packages")),
+            "packages/ raiz não deve ser negado"
+        );
+        assert!(
+            !is_denied_relative(Path::new("packages/kryonix-cli")),
+            "outros pacotes não devem ser negados"
+        );
+        assert!(
+            !is_denied_relative(Path::new("modules/nixos/installer")),
+            "caminhos com 'installer' no nome mas fora do path exato não devem ser negados"
+        );
+    }
+
+    #[tokio::test]
+    async fn copy_engine_excludes_internal_installer_source() {
+        use std::env;
+        use std::time::{SystemTime, UNIX_EPOCH};
+
+        let stamp = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .expect("clock skew")
+            .as_nanos();
+        let tmp = env::temp_dir().join(format!("kryonix-target-tree-test-{stamp}"));
+        let src = tmp.join("src");
+        let dst = tmp.join("dst");
+        std::fs::create_dir_all(&src).expect("mkdir src");
+
+        // Fixture: mini-engine com o fallback do installer presente.
+        let installer_src = src.join("packages/kryonix-installer/src");
+        std::fs::create_dir_all(&installer_src).expect("mkdir installer src");
+        std::fs::write(
+            src.join("packages/kryonix-installer/Cargo.toml"),
+            "[package]\nname = \"kryonix-installer\"\n",
+        )
+        .expect("write Cargo.toml");
+        std::fs::write(installer_src.join("main.rs"), "fn main() {}").expect("write main.rs");
+
+        // Controle positivo: outros packages devem ser copiados.
+        std::fs::create_dir_all(src.join("packages/other-pkg")).expect("mkdir other-pkg");
+        std::fs::write(src.join("packages/other-pkg/default.nix"), "{}")
+            .expect("write other-pkg/default.nix");
+
+        // Controle positivo: raiz do engine.
+        std::fs::create_dir_all(src.join("modules/nixos")).expect("mkdir modules");
+        std::fs::write(src.join("modules/nixos/default.nix"), "{}").expect("write modules");
+        std::fs::write(src.join("flake.nix"), "{ }").expect("write flake.nix");
+
+        copy_engine(&src, &dst)
+            .await
+            .expect("copy_engine deve funcionar");
+
+        // Estado positivo: o que deve ter sido copiado.
+        assert!(dst.join("flake.nix").exists(), "flake.nix deve ser copiado");
+        assert!(
+            dst.join("modules/nixos/default.nix").exists(),
+            "modules/nixos/default.nix deve ser copiado"
+        );
+        assert!(
+            dst.join("packages/other-pkg/default.nix").exists(),
+            "outros pacotes devem ser copiados (controle)"
+        );
+
+        // Estado crítico: o source do installer NÃO pode vazar para o target.
+        assert!(
+            !dst.join("packages/kryonix-installer").exists(),
+            "packages/kryonix-installer deve ser excluído pela denylist relativa"
+        );
+        assert!(
+            !dst.join("packages/kryonix-installer/Cargo.toml").exists(),
+            "arquivo dentro do installer interno também não pode existir"
+        );
+
+        let _ = std::fs::remove_dir_all(&tmp);
     }
 
     #[test]
