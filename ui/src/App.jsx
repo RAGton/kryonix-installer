@@ -209,10 +209,10 @@ export default function App() {
       if (mode === 'dhcp') {
         // Apply DHCP
         applyResult = await applyNetwork({
-          iface,
+          interface: iface,
           mode: 'dhcp',
           address: '',
-          prefixLength: 24,
+          prefix_length: 24,
           gateway: '',
           dns: (draft.mgmtDns || '1.1.1.1,8.8.8.8').split(',').map(d => d.trim()).filter(Boolean),
         });
@@ -238,10 +238,10 @@ export default function App() {
         }
 
         applyResult = await applyNetwork({
-          iface,
+          interface: iface,
           mode: 'static',
           address,
-          prefixLength: prefix,
+          prefix_length: prefix,
           gateway,
           dns: dns.split(',').map(d => d.trim()).filter(Boolean),
         });
@@ -262,6 +262,14 @@ export default function App() {
     // Advance to next step
     goNext();
   }, [step.id, draft, goNext, updateWizard]);
+
+  const advanceWizardSafely = useCallback(() => {
+    if (step.id === 'network') {
+      return handleNetworkNext();
+    }
+    goNext();
+    return Promise.resolve();
+  }, [step.id, handleNetworkNext, goNext]);
 
   const goBack = useCallback(
     () => setStepIndex((previous) => Math.max(0, previous - 1)),
@@ -315,7 +323,7 @@ export default function App() {
         if (k === 'Enter' && !isTyping) event.preventDefault();
         if (explicitNext && canGoNext) {
           event.preventDefault();
-          goNext();
+          void advanceWizardSafely();
         }
         return;
       }
@@ -327,13 +335,13 @@ export default function App() {
       }
       if ((explicitNext || bareEnterNext) && canGoNext) {
         event.preventDefault();
-        goNext();
+        void advanceWizardSafely();
       }
     };
 
     window.addEventListener('keydown', onKeyDown);
     return () => window.removeEventListener('keydown', onKeyDown);
-  }, [canGoNext, step.id, goNext, goBack, uiState.installRunning]);
+  }, [advanceWizardSafely, canGoNext, step.id, goBack, uiState.installRunning]);
 
   // Foco inicial previsível: ao trocar de etapa, foca o primeiro elemento
   // interativo da página (EULA → checkbox, Disks → primeiro card, Users → 1º campo).
@@ -410,8 +418,12 @@ export default function App() {
       onStepJump={(index) => {
         if (uiState.installRunning) return;
         if (step.id === 'eula') return;
-        if (index <= stepIndex || index === stepIndex + 1) {
+        if (index <= stepIndex) {
           setStepIndex(index);
+          return;
+        }
+        if (index === stepIndex + 1 && canGoNext) {
+          void advanceWizardSafely();
         }
       }}
       footer={(
@@ -422,10 +434,10 @@ export default function App() {
           canBack={stepIndex > 0 && !uiState.installRunning}
           canNext={step.id === 'install' ? false : canGoNext && !uiState.installRunning}
           onBack={() => setStepIndex((previous) => Math.max(0, previous - 1))}
-          // handleNetworkNext já encapsula goNext + chamada /network/apply
-          // quando step.id === 'network'; nos demais passos ele apenas
-          // delega para goNext, mantendo paridade com o comportamento antigo.
-          onNext={handleNetworkNext}
+          // advanceWizardSafely centraliza avanço: no step network chama
+          // /network/apply via handleNetworkNext; nos demais passos delega
+          // para goNext, mantendo paridade com o comportamento antigo.
+          onNext={advanceWizardSafely}
           hintText={
             uiState.installRunning
               ? 'Instalação em andamento. Não desligue a VM.'
