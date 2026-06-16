@@ -124,12 +124,12 @@ mod tests {
     fn plan_with(profile: &str, target: &str, selected: Vec<&str>) -> InstallPlan {
         InstallPlan {
             version: 1,
-            hostname: "iso".into(),
-            timezone: "America/Cuiaba".into(),
-            locale: "pt_BR.UTF-8".into(),
-            keyboard: "br-abnt2".into(),
-            disk: PlanDisk {
-                mode: "install".into(),
+            hostname: "test".into(),
+            timezone: "UTC".into(),
+            locale: "en".into(),
+            keyboard: "us".into(),
+            disk: crate::PlanDisk {
+                mode: "dry-run".into(),
                 target: target.into(),
                 layout: "btrfs-simple".into(),
                 boot_mode: "uefi".into(),
@@ -141,9 +141,13 @@ mod tests {
             user: PlanUser {
                 name: "admin".into(),
                 admin: true,
+                uid: 1000,
+                email: String::new(),
+                authorized_keys: vec![],
             },
             features: serde_json::json!({}),
             network: Default::default(),
+            target_remote_access: Default::default(),
         }
     }
 

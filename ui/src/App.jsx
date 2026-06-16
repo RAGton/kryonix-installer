@@ -15,7 +15,7 @@ import Users from './pages/Users.jsx';
 import Summary from './pages/Summary.jsx';
 import Install from './pages/Install.jsx';
 import { validateStep } from './utils/installPlan.js';
-import { installerApi } from './utils/installerApi.js';
+import { installerApi, getInstallerApiErrorMessage } from './utils/installerApi.js';
 import {
   createInstallPlanDraft,
   extractUiTransientState,
@@ -73,11 +73,6 @@ const STEPS = [
     id: 'source',
     title: 'Fonte de Instalação',
     subtitle: 'Offline ou repositório GitHub remoto.',
-  },
-  {
-    id: 'remoteAccess',
-    title: 'Acesso Remoto',
-    subtitle: 'Habilitar o instalador na rede local (VNC/Web).',
   },
   {
     id: 'hostSelection',
@@ -204,6 +199,9 @@ export default function App() {
       return;
     }
 
+    // Limpa estado de erro/pendência antes de uma nova tentativa de aplicar.
+    updateWizard({ netApplyError: '', netApplyBusy: true, networkDhcpPending: false });
+
     let applyResult;
     try {
       if (mode === 'dhcp') {
@@ -219,10 +217,10 @@ export default function App() {
 
         if (applyResult?.applied && applyResult?.ip && applyResult.ip !== '0.0.0.0') {
           // Save detected IP to wizard
-          updateWizard({ serverIp: applyResult.ip, mgmtGateway: applyResult.gateway || '', mgmtDns: applyResult.dns?.join(',') || draft.mgmtDns });
+          updateWizard({ serverIp: applyResult.ip, mgmtGateway: applyResult.gateway || '', mgmtDns: applyResult.dns?.join(',') || draft.mgmtDns, netApplyBusy: false });
         } else {
-          // DHCP didn't get IP yet - show warning but allow continuing
-          updateWizard({ networkDhcpPending: true });
+          // DHCP aplicado mas ainda sem lease/IP: avanço permitido com aviso visível.
+          updateWizard({ networkDhcpPending: true, netApplyBusy: false });
         }
       } else {
         // Static mode - validate and apply
@@ -232,8 +230,11 @@ export default function App() {
         const dns = draft.mgmtDns || '1.1.1.1,8.8.8.8';
 
         if (!address || !gateway) {
-          // Validation will catch this, but just in case
-          goNext();
+          // Modo estático incompleto: erro visível, sem avanço silencioso.
+          updateWizard({
+            netApplyError: 'Modo estático: informe IP do servidor e gateway antes de aplicar.',
+            netApplyBusy: false,
+          });
           return;
         }
 
@@ -247,15 +248,23 @@ export default function App() {
         });
 
         if (applyResult?.applied) {
-          updateWizard({ serverIp: applyResult.ip, mgmtGateway: applyResult.gateway || gateway, mgmtDns: applyResult.dns?.join(',') || dns });
+          updateWizard({ serverIp: applyResult.ip, mgmtGateway: applyResult.gateway || gateway, mgmtDns: applyResult.dns?.join(',') || dns, netApplyBusy: false });
         } else {
-          // Failed to apply - don't advance
+          // Backend não aplicou: erro visível, não avança.
+          updateWizard({
+            netApplyError: 'O backend não aplicou a configuração de rede (/network/apply). Verifique interface, IP e gateway.',
+            netApplyBusy: false,
+          });
           return;
         }
       }
     } catch (err) {
       console.error('[Network] applyNetwork failed:', err);
-      // On error, don't advance
+      // Erro de comunicação/exceção: mensagem visível na UI, sem avanço.
+      updateWizard({
+        netApplyError: getInstallerApiErrorMessage(err, 'Falha ao aplicar a configuração de rede (/network/apply).'),
+        netApplyBusy: false,
+      });
       return;
     }
 
@@ -291,6 +300,14 @@ export default function App() {
   useEffect(() => {
     const onKeyDown = (event) => {
       if (uiState.installRunning) {
+        event.preventDefault();
+        return;
+      }
+      // Rede sendo aplicada: bloqueia TODA navegação por teclado. Sem este gate
+      // o handler chama advanceWizardSafely() direto (fora do lock do footer),
+      // permitindo Enter/Alt+N repetidos dispararem handleNetworkNext concorrentes
+      // e corromperem o wizardState (netApplyBusy era write-only).
+      if (uiState.netApplyBusy) {
         event.preventDefault();
         return;
       }
@@ -341,7 +358,7 @@ export default function App() {
 
     window.addEventListener('keydown', onKeyDown);
     return () => window.removeEventListener('keydown', onKeyDown);
-  }, [advanceWizardSafely, canGoNext, step.id, goBack, uiState.installRunning]);
+  }, [advanceWizardSafely, canGoNext, step.id, goBack, uiState.installRunning, uiState.netApplyBusy]);
 
   // Foco inicial previsível: ao trocar de etapa, foca o primeiro elemento
   // interativo da página (EULA → checkbox, Disks → primeiro card, Users → 1º campo).
@@ -414,9 +431,10 @@ export default function App() {
       stepLabel={`Etapa ${stepIndex + 1} de ${STEPS.length}`}
       steps={stepsWithState}
       currentStepIndex={stepIndex}
-      navigationHint={uiState.installRunning ? 'Navegação bloqueada' : eulaLocked ? 'Atalhos bloqueados na EULA' : 'Alt + ← / Alt + →'}
+      navigationHint={uiState.installRunning ? 'Navegação bloqueada' : uiState.netApplyBusy ? 'Aplicando rede…' : eulaLocked ? 'Atalhos bloqueados na EULA' : 'Alt + ← / Alt + →'}
       onStepJump={(index) => {
         if (uiState.installRunning) return;
+        if (uiState.netApplyBusy) return;
         if (step.id === 'eula') return;
         if (index <= stepIndex) {
           setStepIndex(index);
@@ -431,8 +449,8 @@ export default function App() {
           progressLabel={`${step.title} • ${progressValue}%`}
           progressValue={progressValue}
           issues={footerIssues}
-          canBack={stepIndex > 0 && !uiState.installRunning}
-          canNext={step.id === 'install' ? false : canGoNext && !uiState.installRunning}
+          canBack={stepIndex > 0 && !uiState.installRunning && !uiState.netApplyBusy}
+          canNext={step.id === 'install' ? false : canGoNext && !uiState.installRunning && !uiState.netApplyBusy}
           onBack={() => setStepIndex((previous) => Math.max(0, previous - 1))}
           // advanceWizardSafely centraliza avanço: no step network chama
           // /network/apply via handleNetworkNext; nos demais passos delega
@@ -441,11 +459,13 @@ export default function App() {
           hintText={
             uiState.installRunning
               ? 'Instalação em andamento. Não desligue a VM.'
+              : uiState.netApplyBusy
+                ? 'Aplicando configuração de rede… aguarde.'
               : step.id === 'eula'
                 ? 'Nesta etapa, o avanço só é permitido pelo botão Próximo após marcar o aceite.'
                 : 'Pronto para avançar. Navegação rápida: Alt + ← / Alt + →'
           }
-          nextLabel={step.id === 'summary' ? 'Ir para instalação' : step.id === 'install' ? 'Em execução' : 'Próximo'}
+          nextLabel={uiState.netApplyBusy ? 'Aplicando rede…' : step.id === 'summary' ? 'Ir para instalação' : step.id === 'install' ? 'Em execução' : 'Próximo'}
         />
       )}
     >

@@ -50,7 +50,11 @@ async function requestJson(path, options = {}) {
   return body;
 }
 
-// Maps frontend planPayload + mode → backend InstallPlan type
+// Maps frontend planPayload + mode → backend InstallPlan type.
+//
+// SECURITY: A senha do administrador NUNCA entra neste payload.
+// Ela trafega exclusivamente via buildInstallSecretsPayload (canal separado).
+// Este payload contém apenas campos não-secretos.
 function buildKryonixInstallPlan(planPayload, mode = 'install') {
   const layout = (planPayload.disk?.rootFs === 'btrfs') ? 'btrfs-simple' : 'lvm-simple';
 
@@ -73,8 +77,25 @@ function buildKryonixInstallPlan(planPayload, mode = 'install') {
     user: {
       name: planPayload.admin?.user || 'admin',
       admin: true,
+      // uid e email são campos informativos; não são segredos
+      uid: planPayload.admin?.uid ?? 1000,
+      email: planPayload.admin?.email || '',
+      // authorized_keys: chaves SSH públicas — não são segredos
+      authorized_keys: Array.isArray(planPayload.admin?.authorizedKeys)
+        ? planPayload.admin.authorizedKeys
+        : [],
     },
-    features: {},
+    // features: preserva o que o usuário selecionou na UI.
+    // Nunca hardcodar {}: isso silenciosamente descartaria todas as features.
+    features: planPayload.features && typeof planPayload.features === 'object'
+      ? planPayload.features
+      : {},
+    // target_remote_access: controla explicitamente se o openssh será habilitado no sistema instalado
+    target_remote_access: {
+      enabled: Boolean(planPayload.targetRemoteAccess?.enabled),
+    },
+    // network: repassa o bloco completo para o backend
+    network: planPayload.network || {},
   };
 }
 

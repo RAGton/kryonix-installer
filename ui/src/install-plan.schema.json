@@ -10,7 +10,7 @@
     "features",
     "storage",
     "security",
-    "remoteAccess",
+    "targetRemoteAccess",
     "disk",
     "network",
     "locale",
@@ -72,7 +72,7 @@
         "allowWeakPassword": { "type": "boolean" }
       }
     },
-    "remoteAccess": {
+    "targetRemoteAccess": {
       "type": "object",
       "additionalProperties": false,
       "required": ["enabled"],

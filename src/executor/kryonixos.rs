@@ -26,26 +26,30 @@ mod tests {
     fn make_test_plan() -> InstallPlan {
         InstallPlan {
             version: 1,
-            hostname: "test-host".into(),
-            timezone: "America/Sao_Paulo".into(),
-            locale: "pt_BR.UTF-8".into(),
-            keyboard: "br-abnt2".into(),
-            disk: PlanDisk {
+            hostname: "kryonixos".into(),
+            timezone: "UTC".into(),
+            locale: "en".into(),
+            keyboard: "us".into(),
+            disk: crate::PlanDisk {
                 mode: "install".into(),
-                target: "/dev/null".into(),
+                target: "/dev/sda".into(),
                 layout: "btrfs-simple".into(),
                 boot_mode: "uefi".into(),
                 profile: "single".into(),
-                selected_disks: vec![],
+                selected_disks: vec!["/dev/sda".into()],
                 raid_level: None,
                 manual_partitions: None,
             },
             user: PlanUser {
-                name: "test-user".into(),
+                name: "admin".into(),
                 admin: true,
+                uid: 1000,
+                email: String::new(),
+                authorized_keys: vec![],
             },
             features: serde_json::json!({}),
             network: Default::default(),
+            target_remote_access: Default::default(),
         }
     }
 

@@ -258,28 +258,32 @@ mod tests {
     fn test_safety_check_names_are_unique() {
         // Dummy plan — target /dev/null (never system disk, 0 bytes)
         use crate::{PlanDisk, PlanUser};
-        let plan = crate::InstallPlan {
+        let plan = InstallPlan {
             version: 1,
-            hostname: "test".into(),
+            hostname: "test-safety".into(),
             timezone: "UTC".into(),
             locale: "en_US.UTF-8".into(),
             keyboard: "us".into(),
-            disk: PlanDisk {
-                mode: "install".into(),
-                target: "/dev/null".into(),
+            disk: crate::PlanDisk {
+                mode: "dry-run".into(),
+                target: "/dev/sda".into(),
                 layout: "btrfs-simple".into(),
                 boot_mode: "uefi".into(),
                 profile: "single".into(),
-                selected_disks: vec![],
+                selected_disks: vec!["/dev/sda".into()],
                 raid_level: None,
                 manual_partitions: None,
             },
             user: PlanUser {
                 name: "admin".into(),
                 admin: true,
+                uid: 1000,
+                email: String::new(),
+                authorized_keys: vec![],
             },
             features: serde_json::json!({}),
             network: Default::default(),
+            target_remote_access: Default::default(),
         };
         let checks = run_safety_checks(&plan);
         assert_eq!(checks.len(), 7);
