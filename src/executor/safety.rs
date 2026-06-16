@@ -66,6 +66,7 @@ fn check_installable_disk(target: &str) -> Vec<SafetyCheck> {
     vec![
         check_disk_is_block_device(target),
         check_disk_not_system(target),
+        check_disk_not_iso_boot(target),
         check_disk_not_mounted(target),
         check_disk_has_space(target),
     ]
@@ -152,6 +153,20 @@ fn check_disk_not_system(target: &str) -> SafetyCheck {
             format!("PERIGO: {target} é o disco onde o sistema está rodando!"),
         ),
         Ok(false) => SafetyCheck::pass(name, format!("{target} não é o disco do sistema")),
+        Err(e) => SafetyCheck::fail(name, e),
+    }
+}
+
+// CRÍTICO — impede formatar o dispositivo físico de boot da Live ISO (/iso),
+// que check_disk_not_system não pega (na live, '/' é overlay/tmpfs).
+fn check_disk_not_iso_boot(target: &str) -> SafetyCheck {
+    let name = "disco_nao_e_boot_iso";
+    match disk::is_iso_boot_disk(target) {
+        Ok(true) => SafetyCheck::fail(
+            name,
+            format!("PERIGO: {target} é o dispositivo de boot da Live ISO!"),
+        ),
+        Ok(false) => SafetyCheck::pass(name, format!("{target} não é a mídia de boot da ISO")),
         Err(e) => SafetyCheck::fail(name, e),
     }
 }
@@ -286,11 +301,11 @@ mod tests {
             target_remote_access: Default::default(),
         };
         let checks = run_safety_checks(&plan);
-        assert_eq!(checks.len(), 7);
+        assert_eq!(checks.len(), 8);
         let names: std::collections::HashSet<_> = checks.iter().map(|c| &c.name).collect();
         assert_eq!(
             names.len(),
-            7,
+            8,
             "all check names must be unique for a single target"
         );
     }

@@ -167,6 +167,26 @@ export const installerApi = {
 
   getDiskLayout(disk) { return Promise.resolve({}); },
 
+  // Árvore de partições reais de um disco (lsblk children), para o "Atual" do
+  // DiskVisualizer. Backend: GET /api/disks/:device/partitions (get_partitions),
+  // que sanitiza o nome — passe o device curto (ex.: "sda"), nunca "/dev/sda".
+  getDiskPartitions(device) {
+    const name = String(device || '').trim().replace(/^\/dev\//, '');
+    return requestJson(`/api/disks/${encodeURIComponent(name)}/partitions`).then((raw) => {
+      const root = raw?.blockdevices?.[0] || {};
+      const children = Array.isArray(root.children) ? root.children : [];
+      return children.map((c) => ({
+        name: c.name,
+        path: c.name ? `/dev/${c.name}` : '',
+        sizeBytes: Number(c.size ?? c.size_bytes ?? 0),
+        type: c.type ?? c.type_,
+        fstype: c.fstype ?? '',
+        mountpoint: c.mountpoint ?? null,
+        label: c.label ?? '',
+      }));
+    });
+  },
+
   // Validate the plan via backend dry-run before committing to install.
   // Throws InstallerApiError if any check fails so the hook surfaces the error.
   async savePlan(planPayload, _secrets) {

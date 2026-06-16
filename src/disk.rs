@@ -310,6 +310,64 @@ pub fn is_system_disk(path: &str) -> Result<bool, String> {
     Ok(false)
 }
 
+/// Detecta o disco físico que serve a mídia da Live ISO (montada em /iso).
+///
+/// Bloqueio CRÍTICO complementar a `is_system_disk`: numa Live ISO, `/` é um
+/// overlay/tmpfs, então `is_system_disk` NÃO identifica o USB/CD de boot. Sem
+/// este check, o instalador aceitaria formatar o próprio dispositivo de onde
+/// bootou. `disk_mount_conflicts` também não pega, pois exclui `/iso` de propósito.
+///
+/// Se `/iso` não estiver montado (ex.: netboot / reinstalação), retorna `false`
+/// (sem bloqueio) — comportamento seguro por omissão.
+pub fn is_iso_boot_disk(path: &str) -> Result<bool, String> {
+    if !is_valid_disk_path(path) {
+        return Err(format!("Invalid disk path format: {path}"));
+    }
+
+    let output = Command::new("findmnt")
+        .args(["--target", "/iso", "--output", "SOURCE", "--noheadings"])
+        .output()
+        .map_err(|e| format!("findmnt failed: {e}"))?;
+
+    // /iso ausente → findmnt falha → sem bloqueio (não é uma Live ISO clássica).
+    if !output.status.success() {
+        return Ok(false);
+    }
+
+    let target_base = path.trim_start_matches("/dev/");
+    for raw_source in String::from_utf8_lossy(&output.stdout).lines() {
+        let source = raw_source.trim();
+        if !source.starts_with("/dev/") {
+            continue;
+        }
+
+        let source_base = source.trim_start_matches("/dev/");
+        if source_base == target_base || source_base.starts_with(&format!("{target_base}p")) {
+            return Ok(true);
+        }
+        if (target_base.starts_with("sd") || target_base.starts_with("vd"))
+            && source_base.starts_with(target_base)
+        {
+            return Ok(true);
+        }
+
+        // Resolve o disco-pai do source (ex.: source /dev/sdb1 → PKNAME sdb).
+        let parent = Command::new("lsblk")
+            .args(["-no", "PKNAME", source])
+            .output()
+            .map_err(|e| format!("lsblk PKNAME failed for {source}: {e}"))?;
+        if parent.status.success()
+            && String::from_utf8_lossy(&parent.stdout)
+                .lines()
+                .any(|line| line.trim() == target_base)
+        {
+            return Ok(true);
+        }
+    }
+
+    Ok(false)
+}
+
 fn collect_mounts(node: &LsblkMountNode, mounts: &mut Vec<String>) {
     if let Some(mountpoint) = node.mountpoint.as_deref() {
         let mountpoint = mountpoint.trim();
