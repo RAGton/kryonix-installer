@@ -4,6 +4,7 @@ mod disk;
 mod executor;
 mod network;
 use network::apply_network;
+mod mode;
 mod profiles;
 
 use axum::{
@@ -242,6 +243,8 @@ async fn main() {
         .build()
         .expect("Failed to build HTTP client");
 
+    let installer_mode = mode::InstallerMode::detect();
+
     let state = Arc::new(AppState {
         log_sender: Arc::new(log_tx),
         progress_tx: Arc::new(progress_tx),
@@ -253,8 +256,7 @@ async fn main() {
     let ui_dir = std::env::var("KRYONIX_INSTALLER_UI_DIR")
         .unwrap_or_else(|_| "/run/current-system/sw/share/kryonix-installer/ui/dist".to_string());
 
-    let app = Router::new()
-        .route("/health", get(health))
+    let api_routes = Router::new()
         .route("/version", get(version_handler))
         // Hardware probe — canonical path matches spec, /probe kept for compat
         .route("/hardware", get(probe))
@@ -295,12 +297,20 @@ async fn main() {
         .route("/api/partition", post(partition_endpoint))
         .route("/api/reboot", post(reboot_endpoint))
         .route("/api/stream", get(stream_logs))
+        .route("/auth/verify", get(|| async { axum::http::StatusCode::OK }));
+
+    let app = Router::new()
+        .route("/health", get(health))
+        .merge(api_routes)
         .layer(CorsLayer::permissive())
-        .with_state(state)
+        .with_state(state.clone())
         .fallback_service(ServeDir::new(ui_dir).fallback(ServeDir::new("ui/static")));
 
-    let bind_addr =
-        std::env::var("KRYONIX_INSTALLER_BIND").unwrap_or_else(|_| "127.0.0.1:8080".to_string());
+    let bind_addr = if installer_mode == mode::InstallerMode::Remote {
+        std::env::var("KRYONIX_INSTALLER_BIND").unwrap_or_else(|_| "0.0.0.0:8080".to_string())
+    } else {
+        std::env::var("KRYONIX_INSTALLER_BIND").unwrap_or_else(|_| "127.0.0.1:8080".to_string())
+    };
     let listener = tokio::net::TcpListener::bind(&bind_addr).await.unwrap();
     println!(
         "Kryonix Installer API → http://{}",

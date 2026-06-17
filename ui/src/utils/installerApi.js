@@ -34,7 +34,9 @@ async function requestJson(path, options = {}) {
   const response = await fetch(path, {
     cache: 'no-store',
     ...options,
+    headers: options.headers,
   });
+
   const body = await parseResponseBody(response);
 
   if (!response.ok) {

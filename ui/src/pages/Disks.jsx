@@ -1,22 +1,14 @@
 import { useEffect, useMemo, useState } from 'react';
 import { installerApi, getInstallerApiErrorMessage } from '../utils/installerApi.js';
-import { buildInstallPlanPayload } from '../utils/installPlan.js';
 import {
-  buildRaidPlanSummary,
-  buildSplitPlanSummary,
   formatBytes,
-  getRaidOptionsForSelection,
-  getSelectedDiskRecords,
   normalizeDiskInventory,
   shouldRecommendSrvData,
-  validateRaidSelection,
   validateSingleDiskLayout,
-  validateSplitDiskLayout,
 } from '../utils/storagePlanner.js';
 
-const TABS = ['Discos', 'Layout', 'Manual', 'RAID'];
-
-/* ── helpers ── */
+const GiB = 1024 ** 3;
+const MiB = 1024 ** 2;
 
 function arraysEqual(a, b) {
   return JSON.stringify(a) === JSON.stringify(b);
@@ -26,349 +18,314 @@ function uniqueStrings(items) {
   return Array.from(new Set((Array.isArray(items) ? items : []).filter(Boolean)));
 }
 
-function bytesToGb(bytes) {
-  const n = Number(bytes);
-  return Number.isFinite(n) ? (n / 1_073_741_824).toFixed(0) : '?';
+function diskSizeBytes(disk) {
+  return Number(disk?.sizeBytes ?? disk?.size_bytes ?? disk?.logical_size ?? disk?.size ?? 0) || 0;
 }
 
-/** CSS class para colorir o segmento de partição */
-function segClass(part) {
-  const mp = (part.mountpoint || '').toLowerCase();
-  const fs = (part.fstype || '').toLowerCase();
-  if (mp === '/boot/efi' || mp === '/efi' || fs === 'vfat') return 'pseg-efi';
-  if (mp === '/' || mp === '/root') return 'pseg-root';
-  if (mp === '/home') return 'pseg-home';
-  if (fs === 'swap') return 'pseg-swap';
-  if (fs === 'ntfs') return 'pseg-ntfs';
-  if (mp.startsWith('/srv') || mp.startsWith('/data')) return 'pseg-data';
-  return 'pseg-other';
+function diskLabel(disk) {
+  return disk?.path || (disk?.name ? `/dev/${disk.name}` : 'Disco');
 }
 
-/** Formata label legível para a partição */
-function partLabel(part) {
-  if (part.mountpoint) return part.mountpoint;
-  if (part.label) return part.label;
-  if (part.fstype) return part.fstype.toUpperCase();
-  return part.name;
+function diskPartKey(disk) {
+  return disk?.name || disk?.path?.split('/').pop() || '';
 }
 
-/* ── sub-componentes ── */
+function parseManualSizeToBytes(size, diskBytes) {
+  const raw = String(size || '').trim().toLowerCase();
+  if (!raw) return 0;
+  if (raw === '100%' || raw === 'restante') return Math.max(diskBytes - 512 * MiB, 0);
 
-function PartitionBar({ partitions, totalBytes }) {
-  if (!partitions || partitions.length === 0) {
-    return (
-      <div className="partition-bar">
-        <div className="partition-seg pseg-free" style={{ flex: 1 }} title="Sem partições detectadas" />
-      </div>
-    );
+  const match = raw.match(/^(\d+(?:\.\d+)?)(m|mb|g|gb|t|tb)?$/);
+  if (!match) return 0;
+
+  const value = Number(match[1]);
+  if (!Number.isFinite(value)) return 0;
+  const unit = match[2] || 'g';
+  if (unit === 'm' || unit === 'mb') return value * MiB;
+  if (unit === 't' || unit === 'tb') return value * 1024 * GiB;
+  return value * GiB;
+}
+
+function partitionKind(part) {
+  const mount = String(part.mountpoint || '').toLowerCase();
+  const fs = String(part.fstype || '').toLowerCase();
+  const label = String(part.label || part.name || '').toLowerCase();
+
+  if (mount === '/boot/efi' || mount === '/efi' || fs === 'vfat' || label.includes('efi')) return 'efi';
+  if (mount === '/' || mount === '/root') return 'root';
+  if (mount === '/home') return 'home';
+  if (fs === 'swap') return 'swap';
+  if (fs === 'ntfs') return 'ntfs';
+  if (mount.startsWith('/srv') || mount.startsWith('/data')) return 'data';
+  if (part.kind === 'free') return 'free';
+  return 'other';
+}
+
+function partName(part) {
+  return part.mountpoint || part.label || part.name || part.fstype || 'partição';
+}
+
+function normalizeCurrentPartitions(partitions) {
+  return (Array.isArray(partitions) ? partitions : []).map((part) => ({
+    name: part.name || part.path || 'partição',
+    label: part.label || part.mountpoint || part.fstype || 'existente',
+    mountpoint: part.mountpoint || '',
+    fstype: part.fstype || '',
+    sizeBytes: Number(part.sizeBytes ?? part.size_bytes ?? part.size ?? 0) || 0,
+  }));
+}
+
+function buildRecommendedPlan(disk, wizard) {
+  const total = diskSizeBytes(disk);
+  if (!disk || total <= 0) return [];
+
+  const efi = Math.min(512 * MiB, Math.max(total * 0.02, 128 * MiB));
+  const root = Math.max(total - efi, 0);
+  const enableSrvData = shouldRecommendSrvData(wizard.profileId, wizard.selectedFeatures);
+
+  return [
+    {
+      label: 'EFI',
+      mountpoint: '/boot/efi',
+      fstype: 'vfat',
+      sizeBytes: efi,
+      detail: 'Partição de boot UEFI',
+      kind: 'efi',
+    },
+    {
+      label: enableSrvData ? 'Sistema + dados' : 'Sistema',
+      mountpoint: '/',
+      fstype: 'btrfs',
+      sizeBytes: root,
+      detail: enableSrvData
+        ? 'Subvolumes @, @home, @nix, @log e @srv/data'
+        : 'Subvolumes @, @home, @nix e @log',
+      kind: 'root',
+    },
+  ];
+}
+
+function buildManualPlan(manualParts, selectedDisk) {
+  const total = diskSizeBytes(selectedDisk);
+  return (Array.isArray(manualParts) ? manualParts : [])
+    .filter((part) => part.device === diskLabel(selectedDisk))
+    .map((part) => ({
+      label: part.mountpoint || part.fstype,
+      mountpoint: part.mountpoint,
+      fstype: part.fstype,
+      sizeBytes: parseManualSizeToBytes(part.size, total),
+      detail: part.format ? 'formatar' : 'preservar',
+      kind: partitionKind(part),
+    }));
+}
+
+function validateManualPartitions(parts, selectedDisk) {
+  const issues = [];
+  const warnings = [];
+  const manual = Array.isArray(parts) ? parts : [];
+  const selectedPath = diskLabel(selectedDisk);
+  const mountpoints = manual.map((part) => String(part.mountpoint || '').trim()).filter(Boolean);
+  const duplicateMountpoints = mountpoints.filter((mount, index) => mountpoints.indexOf(mount) !== index);
+  const root = manual.some((part) => part.mountpoint === '/');
+  const efi = manual.some((part) => part.mountpoint === '/boot/efi' || part.mountpoint === '/efi');
+  const totalManualBytes = manual
+    .filter((part) => part.device === selectedPath)
+    .reduce((sum, part) => sum + parseManualSizeToBytes(part.size, diskSizeBytes(selectedDisk)), 0);
+
+  if (!root) issues.push('Modo manual exige partição raiz (/).');
+  if (!efi) issues.push('Modo manual exige partição EFI (/boot/efi ou /efi).');
+  for (const mountpoint of uniqueStrings(duplicateMountpoints)) {
+    issues.push(`Ponto de montagem duplicado: ${mountpoint}.`);
+  }
+  for (const part of manual) {
+    if (!part.device || !part.mountpoint || !part.fstype || !part.size) {
+      issues.push('Todas as partições manuais precisam de disco, montagem, filesystem e tamanho.');
+      break;
+    }
+  }
+  if (totalManualBytes > diskSizeBytes(selectedDisk) && diskSizeBytes(selectedDisk) > 0) {
+    issues.push('A soma das partições manuais excede a capacidade do disco selecionado.');
+  }
+  if (manual.some((part) => part.device !== selectedPath)) {
+    warnings.push('Há partições manuais em outro disco; o preview mostra apenas o disco selecionado.');
   }
 
-  const total = Number(totalBytes) || partitions.reduce((s, p) => s + Number(p.size || 0), 0);
+  return { valid: issues.length === 0, issues, warnings };
+}
+
+function PartitionBar({ title, subtitle, parts, totalBytes, emptyLabel, showPct = true }) {
+  const total = Number(totalBytes) || parts.reduce((sum, part) => sum + Number(part.sizeBytes || 0), 0);
+  const normalized = parts.filter((part) => Number(part.sizeBytes || 0) > 0);
 
   return (
-    <div>
-      <div className="partition-bar">
-        {partitions.map((p, i) => {
-          const size = Number(p.size || 0);
-          const pct = total > 0 ? Math.max((size / total) * 100, 1) : 0;
+    <div className="partition-block">
+      <div className="partition-block-header">
+        <div>
+          <div className="partition-block-title">{title}</div>
+          {subtitle ? <div className="partition-block-subtitle">{subtitle}</div> : null}
+        </div>
+      </div>
+      <div className="partition-bar" role="img" aria-label={`${title}: ${normalized.map(p => `${partName(p)} ${formatBytes(p.sizeBytes)}`).join(', ')}`}>
+        {normalized.length === 0 ? (
+          <div className="partition-seg partition-free partition-empty" title={emptyLabel}>
+            {emptyLabel}
+          </div>
+        ) : normalized.map((part, index) => {
+          const pct = total > 0 ? Math.max((Number(part.sizeBytes || 0) / total) * 100, 0.5) : 0.5;
+          const kind = part.kind || partitionKind(part);
           return (
             <div
-              key={i}
-              className={`partition-seg ${segClass(p)}`}
+              key={`${partName(part)}-${index}`}
+              className={`partition-seg partition-${kind}`}
               style={{ flex: `${pct} 0 0` }}
-              title={`${partLabel(p)} — ${bytesToGb(p.size)} GB`}
-            />
+              title={`${partName(part)} · ${formatBytes(part.sizeBytes)} · ${part.fstype || 'fs'}`}
+            >
+              {showPct && pct >= 8 ? (
+                <span className="partition-seg-label">{partName(part)} · {formatBytes(part.sizeBytes)}</span>
+              ) : null}
+            </div>
           );
         })}
       </div>
-      <div className="partition-legend">
-        {partitions.map((p, i) => (
-          <div key={i} className="legend-item">
-            <div className={`legend-dot ${segClass(p)}`} />
-            <span>{partLabel(p)} {bytesToGb(p.size)}G</span>
-          </div>
-        ))}
-      </div>
+      {normalized.length > 0 ? (
+        <div className="partition-legend">
+          {normalized.map((part, index) => (
+            <div key={`${partName(part)}-legend-${index}`} className="legend-item">
+              <div className={`legend-dot partition-${part.kind || partitionKind(part)}`} />
+              <span>{partName(part)} · {formatBytes(part.sizeBytes)} · {part.fstype || 'fs'}</span>
+              {part.detail ? <span className="legend-detail">({part.detail})</span> : null}
+            </div>
+          ))}
+        </div>
+      ) : null}
     </div>
   );
 }
 
-function DiskCard({ disk, selected, partData, onClick }) {
-  const partitions = partData?.blockdevices?.[0]?.children ?? [];
-  const totalSize = partData?.blockdevices?.[0]?.size ?? disk.size_bytes ?? disk.size;
+function DiskCard({ disk, selected, onSelect }) {
   const blocked = disk.eligible === false;
-  const reason = Array.isArray(disk.eligibilityIssues) ? disk.eligibilityIssues[0] : null;
+  const reason = Array.isArray(disk.eligibilityIssues) ? disk.eligibilityIssues[0] : '';
 
   return (
-    <div
-      className={`disk-card${selected ? ' selected' : ''}${blocked ? ' disk-card-blocked' : ''}`}
-      onClick={blocked ? undefined : onClick}
-      role="button"
-      aria-disabled={blocked}
-      tabIndex={blocked ? -1 : 0}
-      style={blocked ? { opacity: 0.55, cursor: 'not-allowed' } : undefined}
-      onKeyDown={e => !blocked && (e.key === 'Enter' || e.key === ' ') && onClick?.()}
+    <button
+      type="button"
+      className={`disk-card${selected ? ' selected' : ''}${blocked ? ' blocked' : ''}`}
+      disabled={blocked}
+      onClick={onSelect}
     >
-      <div className="disk-card-header">
-        <div>
-          <span className="disk-name">{disk.path ?? `/dev/${disk.name}`}</span>
-          {disk.model && (
-            <span style={{ fontSize: 11, color: 'var(--text3)', marginLeft: 8 }}>{disk.model}</span>
-          )}
-        </div>
-        {blocked ? (
-          <span style={{
-            fontSize: 11, fontWeight: 700, color: 'var(--danger)',
-            border: '1px solid var(--danger)', borderRadius: 4, padding: '1px 6px',
-          }}>
-            Bloqueado
-          </span>
-        ) : (
-          <span className="disk-size">{disk.size ?? `${bytesToGb(disk.size_bytes)} GB`}</span>
-        )}
-      </div>
-
-      <div style={{ fontSize: 10, color: 'var(--text3)', marginTop: 2, display: 'flex', gap: 12, flexWrap: 'wrap' }}>
-        {disk.type && <span>tipo: {disk.type}</span>}
-        {disk.readonly && <span style={{ color: 'var(--danger)' }}>read-only</span>}
-        {disk.removable && <span style={{ color: 'var(--warning)' }}>removível</span>}
-      </div>
-
-      <PartitionBar partitions={partitions} totalBytes={totalSize} />
-
-      {blocked && reason && (
-        <div style={{ fontSize: 11, color: 'var(--danger)', marginTop: 6 }}>
-          ⚠ {reason}
-        </div>
-      )}
-
-      {selected && !blocked && (
-        <div style={{ fontSize: 11, color: 'var(--primary)', marginTop: 6 }}>
-          ✓ Disco selecionado para instalação
-        </div>
-      )}
-    </div>
-  );
-}
-
-/* ── aba Discos ── */
-
-function TabDiscos({ diskInventory, loadingDisks, diskError, partitions, wizard, onChange, eligibleDisks, eligiblePaths, onReload }) {
-  const toolbar = (
-    <div className="flex-between" style={{ marginBottom: 12, gap: 12 }}>
-      <span style={{ fontSize: 11, color: 'var(--danger)', fontWeight: 600 }}>
-        ⚠ A instalação APAGA e REPARTICIONA o disco selecionado. Faça backup antes.
-      </span>
-      <button
-        type="button"
-        className="btn btn-ghost"
-        style={{ padding: '4px 10px', fontSize: 12, whiteSpace: 'nowrap' }}
-        onClick={onReload}
-      >
-        ↻ Atualizar discos
-      </button>
-    </div>
-  );
-
-  if (loadingDisks) {
-    return (
-      <div className="scanning" style={{ marginTop: 24, justifyContent: 'center' }}>
-        <div className="scan-dot" />
-        Detectando discos...
-      </div>
-    );
-  }
-
-  if (diskError) {
-    return (
-      <div>
-        {toolbar}
-        <div style={{ padding: '16px 0', fontSize: 13, color: 'var(--danger)' }}>✗ {diskError}</div>
-      </div>
-    );
-  }
-
-  const blocked = diskInventory.filter(d => d.eligible === false);
-
-  const cardFor = (disk) => (
-    <DiskCard
-      key={disk.path}
-      disk={disk}
-      selected={wizard.sysDisk === disk.path}
-      partData={partitions[disk.name ?? disk.path?.split('/').pop()]}
-      onClick={() => {
-        if (eligiblePaths.has(disk.path)) {
-          onChange({ sysDisk: disk.path, selectedDisks: [disk.path] });
-        }
-      }}
-    />
-  );
-
-  return (
-    <div>
-      {toolbar}
-
-      <div style={{ fontSize: 12, color: 'var(--text3)', fontWeight: 600, textTransform: 'uppercase', margin: '4px 0 8px' }}>
-        Discos elegíveis ({eligibleDisks.length})
-      </div>
-      {eligibleDisks.length === 0 ? (
-        <div style={{ padding: '12px 0', fontSize: 13, color: 'var(--text3)' }}>
-          Nenhum disco elegível detectado para instalação.
-        </div>
-      ) : (
-        <div className="disk-grid">{eligibleDisks.map(cardFor)}</div>
-      )}
-
-      {blocked.length > 0 && (
-        <>
-          <div style={{ fontSize: 12, color: 'var(--text3)', fontWeight: 600, textTransform: 'uppercase', margin: '16px 0 8px' }}>
-            Discos bloqueados ({blocked.length})
+      <div className="disk-card-main">
+        <div className="disk-card-info">
+          <div className="disk-card-name-row">
+            <span className="disk-card-name">{diskLabel(disk)}</span>
+            {disk === selected && !blocked ? <span className="disk-badge recommended">recomendado</span> : null}
+            {blocked ? <span className="disk-badge danger">bloqueado</span> : null}
           </div>
-          <div className="disk-grid">{blocked.map(cardFor)}</div>
-        </>
-      )}
-    </div>
+          <div className="disk-card-meta">
+            {disk.model || 'Modelo desconhecido'} · {disk.type || 'disk'} · {formatBytes(diskSizeBytes(disk))}
+          </div>
+        </div>
+        <div className="disk-card-radio" aria-hidden="true">{selected ? '●' : '○'}</div>
+      </div>
+      {reason ? <div className="disk-card-warning">{reason}</div> : null}
+    </button>
   );
 }
 
-/* ── aba Layout ── */
+function ManualPartitionModal({ onClose, onSave, initialData, selectedDisk }) {
+  const [formData, setFormData] = useState(initialData || {
+    device: diskLabel(selectedDisk),
+    mountpoint: '',
+    fstype: 'btrfs',
+    size: '100%',
+    format: true,
+  });
 
-function TabLayout({ layoutMode, onLayoutChange, wizard, diskInventory, splitSummary, raidSummary, raidOptions }) {
-  // Mantem coerencia com buildInstallPlanPayload (installPlan.js):
-  // /srv/data preview segue a mesma regra central.
-  const enableSrvData = shouldRecommendSrvData(wizard.profileId, wizard.selectedFeatures);
+  const isValid = formData.device && formData.mountpoint && formData.fstype && formData.size;
 
-  const subvolumes = enableSrvData ? '@, @home, @nix, @log, @srv' : '@, @home, @nix, @log';
-  const splitDesc = enableSrvData
-    ? 'Sistema em disco 1 · disco 2 montado em /srv/data (Recomendado para IA/Server)'
-    : 'Sistema em disco 1 · disco 2 dedicado a dados extras';
+  const mountpointOptions = [
+    { value: '/', label: '/ (raiz)' },
+    { value: '/home', label: '/home' },
+    { value: '/boot/efi', label: '/boot/efi (EFI)' },
+    { value: '/efi', label: '/efi (EFI alternativo)' },
+    { value: '/var', label: '/var' },
+    { value: '/nix', label: '/nix' },
+    { value: '/srv/data', label: '/srv/data' },
+  ];
 
-  const modes = [
-    { id: 'single', label: 'Apagar tudo', desc: `Um disco · EFI + / BTRFS · subvolumes ${subvolumes}` },
-    { id: 'split',  label: 'Dois discos', desc: splitDesc },
-    { id: 'raid',   label: 'RAID / LVM',  desc: 'Múltiplos discos · redundância ou expansão de capacidade' },
-    { id: 'manual', label: 'Manual',      desc: 'Particionamento customizado · controle total de montagem' },
+  const fstypeOptions = [
+    { value: 'btrfs', label: 'btrfs' },
+    { value: 'ext4', label: 'ext4' },
+    { value: 'xfs', label: 'xfs' },
+    { value: 'vfat', label: 'vfat (EFI)' },
+    { value: 'swap', label: 'swap' },
+    { value: 'ntfs', label: 'ntfs' },
   ];
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-      {modes.map(m => (
-        <div
-          key={m.id}
-          className={`disk-card${layoutMode === m.id ? ' selected' : ''}`}
-          onClick={() => onLayoutChange(m.id)}
-          role="button"
-          tabIndex={0}
-          onKeyDown={e => (e.key === 'Enter' || e.key === ' ') && onLayoutChange(m.id)}
-        >
-          <div style={{ fontSize: 13, fontWeight: 700, color: 'var(--text)', marginBottom: 4 }}>{m.label}</div>
-          <div style={{ fontSize: 12, color: 'var(--text2)' }}>{m.desc}</div>
-          {layoutMode === m.id && (splitSummary || raidSummary) && (
-            <div style={{ fontSize: 11, color: 'var(--primary)', marginTop: 6 }}>
-              {m.id === 'raid' ? raidSummary?.description : splitSummary?.description}
-            </div>
-          )}
-          {layoutMode === m.id && m.id === 'manual' && (
-            <div style={{ fontSize: 11, color: 'var(--primary)', marginTop: 6 }}>
-              ✓ Modo manual ativado. Configure as partições na aba Manual.
-            </div>
-          )}
-        </div>
-      ))}
-    </div>
-  );
-}
-
-/* ── aba Manual ── */
-
-function PartitionModal({ onClose, onSave, initialData, eligibleDisks }) {
-  const [formData, setFormData] = useState(initialData || {
-    device: eligibleDisks[0]?.path || '',
-    mountpoint: '',
-    fstype: 'ext4',
-    size: '10G',
-    format: true
-  });
-
-  const isValid = formData.device && formData.mountpoint && formData.size;
-
-  return (
-    <div className="modal-overlay" onClick={onClose}>
-      <div className="modal-content glass-panel" style={{ width: 420 }} onClick={e => e.stopPropagation()}>
-        <h3 className="modal-title">{initialData ? 'Editar Partição' : 'Nova Partição'}</h3>
+    <div className="modal-overlay" onClick={onClose} role="dialog" aria-modal="true" aria-labelledby="modal-title">
+      <div className="modal-content glass-panel disk-partition-modal" onClick={(event) => event.stopPropagation()}>
+        <h3 id="modal-title" className="modal-title">{initialData ? 'Editar partição' : 'Nova partição'}</h3>
 
         <div className="form-group">
-          <label>Disco Alvo</label>
+          <label htmlFor="mp-device">Disco</label>
+          <input id="mp-device" className="input-shell" value={formData.device} disabled />
+        </div>
+
+        <div className="form-group">
+          <label htmlFor="mp-mountpoint">Ponto de montagem</label>
           <select
-            value={formData.device}
-            onChange={e => setFormData({...formData, device: e.target.value})}
+            id="mp-mountpoint"
+            value={formData.mountpoint}
+            onChange={(event) => setFormData({ ...formData, mountpoint: event.target.value })}
             className="input-shell"
-            style={{ width: '100%' }}
           >
-            {eligibleDisks.map(d => (
-              <option key={d.path} value={d.path}>{d.path} ({bytesToGb(d.size_bytes)} GB)</option>
+            <option value="">Selecione…</option>
+            {mountpointOptions.map((opt) => (
+              <option key={opt.value} value={opt.value}>{opt.label}</option>
             ))}
           </select>
         </div>
 
-        <div className="form-group">
-          <label>Ponto de Montagem</label>
-          <input
-            type="text"
-            placeholder="Ex: /, /home, /boot/efi"
-            value={formData.mountpoint}
-            onChange={e => setFormData({...formData, mountpoint: e.target.value})}
-            className="input-shell"
-            style={{ width: '100%' }}
-          />
-        </div>
-
         <div className="form-grid">
           <div className="form-group">
-            <label>Filesystem</label>
+            <label htmlFor="mp-fstype">Filesystem</label>
             <select
+              id="mp-fstype"
               value={formData.fstype}
-              onChange={e => setFormData({...formData, fstype: e.target.value})}
+              onChange={(event) => setFormData({ ...formData, fstype: event.target.value })}
               className="input-shell"
-              style={{ width: '100%' }}
             >
-              <option value="ext4">ext4</option>
-              <option value="btrfs">btrfs</option>
-              <option value="vfat">vfat (EFI)</option>
-              <option value="xfs">xfs</option>
-              <option value="swap">swap</option>
+              {fstypeOptions.map((opt) => (
+                <option key={opt.value} value={opt.value}>{opt.label}</option>
+              ))}
             </select>
           </div>
           <div className="form-group">
-            <label>Tamanho</label>
+            <label htmlFor="mp-size">Tamanho</label>
             <input
+              id="mp-size"
               type="text"
-              placeholder="Ex: 512M, 20G, 100%"
+              placeholder="512M, 40G, 100%"
               value={formData.size}
-              onChange={e => setFormData({...formData, size: e.target.value})}
+              onChange={(event) => setFormData({ ...formData, size: event.target.value })}
               className="input-shell"
-              style={{ width: '100%' }}
             />
           </div>
         </div>
 
-        <label className="flex-row gap-8" style={{ marginTop: 8, cursor: 'pointer', userSelect: 'none' }}>
+        <label className="manual-format-toggle">
           <input
             type="checkbox"
             checked={formData.format}
-            onChange={e => setFormData({...formData, format: e.target.checked})}
+            onChange={(event) => setFormData({ ...formData, format: event.target.checked })}
           />
-          <span style={{ fontSize: 13, color: 'var(--text2)' }}>Formatar partição (cria novo FS)</span>
+          <span>Formatar esta partição</span>
         </label>
 
         <div className="modal-actions">
-          <button className="btn-secondary" onClick={onClose}>Cancelar</button>
-          <button
-            className="btn-primary"
-            disabled={!isValid}
-            onClick={() => onSave(formData)}
-          >
-            {initialData ? 'Atualizar' : 'Adicionar'}
+          <button type="button" className="btn-secondary" onClick={onClose}>Cancelar</button>
+          <button type="button" className="btn-primary" disabled={!isValid} onClick={() => onSave(formData)}>
+            {initialData ? 'Salvar' : 'Adicionar'}
           </button>
         </div>
       </div>
@@ -376,415 +333,547 @@ function PartitionModal({ onClose, onSave, initialData, eligibleDisks }) {
   );
 }
 
-function TabManual({ wizard, onChange, eligibleDisks }) {
-  const [showModal, setShowModal] = useState(false);
-  const [editingIndex, setEditingIndex] = useState(-1);
-  const manualParts = wizard.manualPartitions || [];
+function ManualDrawer({ wizard, selectedDisk, manualValidation, onChange, onClose, onUseRecommended }) {
+  const [modalIndex, setModalIndex] = useState(null);
+  const manualParts = Array.isArray(wizard.manualPartitions) ? wizard.manualPartitions : [];
+  const selectedPath = diskLabel(selectedDisk);
+  const previewParts = buildManualPlan(manualParts, selectedDisk);
 
-  const handleAdd = () => {
-    setEditingIndex(-1);
-    setShowModal(true);
-  };
-
-  const handleEdit = (index) => {
-    setEditingIndex(index);
-    setShowModal(true);
-  };
-
-  const handleRemove = (index) => {
+  function upsertPartition(part) {
     const next = [...manualParts];
-    next.splice(index, 1);
-    onChange({ manualPartitions: next });
-  };
-
-  const handleSave = (part) => {
-    const next = [...manualParts];
-    if (editingIndex >= 0) {
-      next[editingIndex] = part;
+    if (Number.isInteger(modalIndex) && modalIndex >= 0) {
+      next[modalIndex] = part;
     } else {
       next.push(part);
     }
-    onChange({ manualPartitions: next });
-    setShowModal(false);
-  };
+    onChange({
+      diskProfile: 'manual',
+      diskMode: 'one',
+      sysDisk: selectedPath,
+      dataDisk: '',
+      selectedDisks: uniqueStrings([selectedPath, ...next.map((item) => item.device)]),
+      manualPartitions: next,
+    });
+    setModalIndex(null);
+  }
+
+  function removePartition(index) {
+    const next = manualParts.filter((_, current) => current !== index);
+    onChange({
+      diskProfile: next.length > 0 ? 'manual' : 'single',
+      diskMode: 'one',
+      sysDisk: selectedPath,
+      dataDisk: '',
+      selectedDisks: [selectedPath],
+      manualPartitions: next,
+    });
+  }
+
+  const hasIssues = manualValidation.issues.length > 0;
+  const hasWarnings = manualValidation.warnings.length > 0;
 
   return (
-    <div className="manual-partition-container">
-      <div className="flex-between" style={{ marginBottom: 16 }}>
-        <div style={{ fontSize: 14, fontWeight: 700, color: 'var(--text)' }}>Plano de Particionamento</div>
-        <button className="btn-primary" style={{ padding: '6px 12px', fontSize: 12 }} onClick={handleAdd}>
-          + Nova Partição
-        </button>
-      </div>
+    <div className="manual-drawer-overlay" role="dialog" aria-modal="true">
+      <div className="manual-drawer">
+        <header className="manual-drawer-header">
+          <div>
+            <div className="eyebrow">Modo avançado</div>
+            <h3>Particionamento manual</h3>
+            <p>Defina as partições que serão criadas. O preview abaixo atualiza em tempo real.</p>
+          </div>
+          <button type="button" className="btn-secondary" onClick={onClose}>Fechar</button>
+        </header>
 
-      <div className="manual-table-wrapper">
-        <table className="manual-table">
-          <thead>
-            <tr>
-              <th>Disco</th>
-              <th>Montagem</th>
-              <th>FS</th>
-              <th>Tamanho</th>
-              <th>Fmt</th>
-              <th>Ações</th>
-            </tr>
-          </thead>
-          <tbody>
-            {manualParts.length === 0 ? (
-              <tr>
-                <td colSpan="6" style={{ textAlign: 'center', color: 'var(--text3)', padding: '32px 16px' }}>
-                  Nenhuma partição customizada definida. <br/>
-                  <span style={{ fontSize: 11, marginTop: 8, display: 'block' }}>
-                    Adicione pelo menos / e /boot/efi para prosseguir.
-                  </span>
-                </td>
-              </tr>
-            ) : (
-              manualParts.map((p, i) => (
-                <tr key={i}>
-                  <td style={{ fontSize: 11 }}>{p.device.split('/').pop()}</td>
-                  <td><code className="code-pill">{p.mountpoint}</code></td>
-                  <td>{p.fstype}</td>
-                  <td>{p.size}</td>
-                  <td>{p.format ? '✓' : '✗'}</td>
-                  <td>
-                    <div style={{ display: 'flex', gap: 8 }}>
-                      <button className="btn-icon" title="Editar" onClick={() => handleEdit(i)}>✎</button>
-                      <button className="btn-icon danger" title="Remover" onClick={() => handleRemove(i)}>✕</button>
-                    </div>
-                  </td>
+        <div className="manual-drawer-body">
+          <div className="manual-drawer-preview">
+            <PartitionBar
+              title="Preview do plano manual"
+              subtitle={manualParts.length > 0 ? `${manualParts.length} partição(ões) definida(s)` : 'Nenhuma partição — adicione pelo menos / e /boot/efi'}
+              parts={previewParts}
+              totalBytes={diskSizeBytes(selectedDisk)}
+              emptyLabel="vazio — adicione partições"
+            />
+          </div>
+
+          <div className="manual-drawer-actions">
+            <button type="button" className="btn-primary" onClick={() => setModalIndex(-1)}>
+              Nova partição
+            </button>
+            <button type="button" className="btn-secondary" onClick={onUseRecommended}>
+              Restaurar recomendado
+            </button>
+          </div>
+
+          <div className="manual-table-wrapper">
+            <table className="manual-table">
+              <thead>
+                <tr>
+                  <th>#</th>
+                  <th>Montagem</th>
+                  <th>FS</th>
+                  <th>Tamanho</th>
+                  <th>Formato</th>
+                  <th>Ações</th>
                 </tr>
-              ))
-            )}
-          </tbody>
-        </table>
-      </div>
+              </thead>
+              <tbody>
+                {manualParts.length === 0 ? (
+                  <tr>
+                    <td colSpan="6" className="manual-empty">
+                      Nenhuma partição manual. Adicione pelo menos <code>/</code> e <code>/boot/efi</code>.
+                    </td>
+                  </tr>
+                ) : manualParts.map((part, index) => (
+                  <tr key={`${part.device}-${part.mountpoint}-${index}`}>
+                    <td><span className="part-index">{index + 1}</span></td>
+                    <td><code className="code-pill">{part.mountpoint}</code></td>
+                    <td>{part.fstype}</td>
+                    <td>{part.size}</td>
+                    <td>{part.format ? 'formatar' : 'preservar'}</td>
+                    <td>
+                      <div className="manual-row-actions">
+                        <button
+                          type="button"
+                          className="btn-icon"
+                          title="Editar partição"
+                          onClick={() => setModalIndex(index)}
+                          aria-label={`Editar partição ${part.mountpoint}`}
+                        >
+                          E
+                        </button>
+                        <button
+                          type="button"
+                          className="btn-icon danger"
+                          title="Remover partição"
+                          onClick={() => removePartition(index)}
+                          aria-label={`Remover partição ${part.mountpoint}`}
+                        >
+                          X
+                        </button>
+                      </div>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
 
-      {showModal && (
-        <PartitionModal
-          onClose={() => setShowModal(false)}
-          onSave={handleSave}
-          initialData={editingIndex >= 0 ? manualParts[editingIndex] : null}
-          eligibleDisks={eligibleDisks}
-        />
-      )}
-    </div>
-  );
-}
-
-/* ── aba RAID ── */
-
-function TabRAID({ wizard, onChange, eligibleDisks }) {
-  const selectedDisks = wizard.selectedDisks || [];
-  const raidLevel = wizard.raidLevel || 'raid1';
-
-  const toggleDisk = (path) => {
-    let next;
-    if (selectedDisks.includes(path)) {
-      next = selectedDisks.filter(p => p !== path);
-    } else {
-      next = [...selectedDisks, path];
-    }
-    onChange({ selectedDisks: next });
-  };
-
-  const calculateCapacity = () => {
-    const disks = eligibleDisks.filter(d => selectedDisks.includes(d.path));
-    if (disks.length === 0) return 0;
-
-    const sizes = disks.map(d => Number(d.size_bytes || 0));
-    const minSize = Math.min(...sizes);
-
-    switch (raidLevel) {
-      case 'raid0':
-        return sizes.reduce((a, b) => a + b, 0);
-      case 'raid1':
-        return minSize;
-      case 'raid5':
-        return minSize * (disks.length - 1);
-      case 'raid10':
-        return (minSize * disks.length) / 2;
-      default:
-        return 0;
-    }
-  };
-
-  const capacity = calculateCapacity();
-  const raidLevels = [
-    { id: 'raid0', label: 'RAID 0', desc: 'Performance (Striping) · Sem redundância' },
-    { id: 'raid1', label: 'RAID 1', desc: 'Segurança (Mirroring) · Redundância de 1 disco' },
-    { id: 'raid5', label: 'RAID 5', desc: 'Equilíbrio · Redundância de 1 disco · Mínimo 3 discos' },
-  ];
-
-  return (
-    <div style={{ padding: 16 }}>
-      <div style={{ marginBottom: 20 }}>
-        <label style={{ fontSize: 12, color: 'var(--text3)', fontWeight: 600, textTransform: 'uppercase' }}>Nível de RAID</label>
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 12, marginTop: 8 }}>
-          {raidLevels.map(lvl => (
-            <div
-              key={lvl.id}
-              className={`disk-card${raidLevel === lvl.id ? ' selected' : ''}`}
-              style={{ padding: '12px', textAlign: 'center' }}
-              onClick={() => onChange({ raidLevel: lvl.id })}
-              role="button"
-              tabIndex={0}
-              onKeyDown={e => (e.key === 'Enter' || e.key === ' ') && onChange({ raidLevel: lvl.id })}
-            >
-              <div style={{ fontSize: 13, fontWeight: 700, color: 'var(--text)' }}>{lvl.label}</div>
-              <div style={{ fontSize: 10, color: 'var(--text3)', marginTop: 4 }}>{lvl.desc}</div>
-            </div>
-          ))}
-        </div>
-      </div>
-
-      <div style={{ marginBottom: 20 }}>
-        <label style={{ fontSize: 12, color: 'var(--text3)', fontWeight: 600, textTransform: 'uppercase' }}>Selecionar Discos</label>
-        <div style={{ marginTop: 8, display: 'flex', flexDirection: 'column', gap: 8 }}>
-          {eligibleDisks.map(d => (
-            <label
-              key={d.path}
-              className={`flex-between glass-panel${selectedDisks.includes(d.path) ? ' border-primary' : ''}`}
-              style={{ padding: '10px 16px', cursor: 'pointer', border: '1px solid var(--border1)' }}
-            >
-              <div className="flex-row gap-8">
-                <input
-                  type="checkbox"
-                  checked={selectedDisks.includes(d.path)}
-                  onChange={() => toggleDisk(d.path)}
-                />
-                <span style={{ fontSize: 13, fontWeight: 600 }}>{d.path}</span>
-                <span style={{ fontSize: 11, color: 'var(--text3)' }}>{d.model}</span>
+          <div className={`manual-validation ${hasIssues ? 'has-issues' : ''}`}>
+            {manualValidation.issues.map((issue) => (
+              <div key={issue} className="validation-item danger" role="alert">
+                <span className="validation-icon" aria-hidden="true">✕</span>
+                {issue}
               </div>
-              <span style={{ fontSize: 12, fontWeight: 700 }}>{bytesToGb(d.size_bytes)} GB</span>
-            </label>
-          ))}
+            ))}
+            {manualValidation.warnings.map((warning) => (
+              <div key={warning} className="validation-item warning">
+                <span className="validation-icon" aria-hidden="true">⚠</span>
+                {warning}
+              </div>
+            ))}
+            {!hasIssues && !hasWarnings && manualParts.length > 0 && (
+              <div className="validation-item ok">
+                <span className="validation-icon" aria-hidden="true">✓</span>
+                Plano manual válido — pronto para validação final no dry-run.
+              </div>
+            )}
+            {!hasIssues && !hasWarnings && manualParts.length === 0 && (
+              <div className="validation-item info">
+                <span className="validation-icon" aria-hidden="true">ℹ</span>
+                Adicione partições para validar o plano.
+              </div>
+            )}
+          </div>
         </div>
-      </div>
 
-      <div className="glass-panel" style={{ padding: 16, border: '1px solid var(--primary-low)' }}>
-        <div className="flex-between">
-          <span style={{ color: 'var(--text2)', fontSize: 13 }}>Capacidade Efetiva Resultante:</span>
-          <span style={{ color: 'var(--primary)', fontSize: 18, fontWeight: 900 }}>
-            {formatBytes(capacity)}
-          </span>
-        </div>
-        <div style={{ fontSize: 11, color: 'var(--text3)', marginTop: 4 }}>
-          * Cálculo baseado no menor disco do array ({raidLevel.toUpperCase()}).
-        </div>
+        {modalIndex !== null ? (
+          <ManualPartitionModal
+            selectedDisk={selectedDisk}
+            initialData={modalIndex >= 0 ? manualParts[modalIndex] : null}
+            onClose={() => setModalIndex(null)}
+            onSave={upsertPartition}
+          />
+        ) : null}
       </div>
     </div>
   );
 }
 
-/* ── abas placeholder ── */
+function RecommendedLayoutCard({ selectedDisk, wizard, isManualMode }) {
+  const enableSrvData = shouldRecommendSrvData(wizard.profileId, wizard.selectedFeatures);
+  const plan = buildRecommendedPlan(selectedDisk, wizard);
 
-function TabPlaceholder({ name }) {
+  if (isManualMode) {
+    return (
+      <div className="layout-card manual-mode">
+        <div className="layout-card-header">
+          <h3>Plano manual ativo</h3>
+          <span className="layout-badge manual">manual</span>
+        </div>
+        <p>Você está revisando um plano avançado. O backend fará dry-run antes da instalação.</p>
+      </div>
+    );
+  }
+
   return (
-    <div className="tab-placeholder">
-      <span style={{ fontSize: 22, color: 'var(--border2)' }}>◈</span>
-      <span>{name} — em desenvolvimento (RAID advanced UI)</span>
+    <div className="layout-card recommended">
+      <div className="layout-card-header">
+        <h3>Layout recomendado pelo Kryonix</h3>
+        <span className="layout-badge auto">automático</span>
+      </div>
+      <p className="layout-desc">
+        O instalador criará uma partição EFI e uma raiz Btrfs ocupando o restante do disco.
+        Subvolumes são gerenciados automaticamente dentro do volume raiz.
+      </p>
+      <div className="layout-parts">
+        {plan.map((part, index) => (
+          <div key={index} className={`layout-part layout-part-${part.kind}`}>
+            <div className="layout-part-icon" aria-hidden="true">
+              {part.kind === 'efi' ? '⏻' : '💾'}
+            </div>
+            <div className="layout-part-info">
+              <div className="layout-part-name">{part.label}</div>
+              <div className="layout-part-detail">
+                {part.mountpoint} · {formatBytes(part.sizeBytes)} · {part.fstype}
+              </div>
+              <div className="layout-part-subdetail">{part.detail}</div>
+            </div>
+          </div>
+        ))}
+      </div>
+      <div className="layout-tags">
+        <span className="layout-tag">GPT</span>
+        <span className="layout-tag">UEFI</span>
+        <span className="layout-tag">Btrfs</span>
+        <span className="layout-tag destructive">destrutivo</span>
+        {enableSrvData ? <span className="layout-tag">/srv/data como subvolume</span> : <span className="layout-tag muted">/srv/data desativado</span>}
+      </div>
     </div>
   );
 }
 
-
-/* ══════════════════════════════════════════════════════════════
-   COMPONENTE PRINCIPAL
-══════════════════════════════════════════════════════════════ */
-
-export default function Disks({ wizard, uiState, onChange, validation }) {
-  const [activeTab, setActiveTab] = useState(0);
-
-  /* ── discos ── */
+export default function Disks({ wizard, uiState, onChange }) {
   const [diskInventory, setDiskInventory] = useState([]);
-  const [loadingDisks, setLoadingDisks]   = useState(true);
-  const [diskError, setDiskError]         = useState('');
-  const [reloadKey, setReloadKey]         = useState(0);
-  const reloadDisks = () => setReloadKey(k => k + 1);
+  const [partitionsByDisk, setPartitionsByDisk] = useState({});
+  const [loadingDisks, setLoadingDisks] = useState(true);
+  const [diskError, setDiskError] = useState('');
+  const [reloadKey, setReloadKey] = useState(0);
+  const [manualOpen, setManualOpen] = useState(false);
 
-  /* ── partições por device name ── */
-  const [partitions, setPartitions] = useState({});
-
-  /* carregar lista de discos */
   useEffect(() => {
     let cancelled = false;
     setLoadingDisks(true);
     setDiskError('');
 
     installerApi.getDisks()
-      .then(disks => {
-        // /api/disks devolve um ARRAY (não { disks: [...] })
+      .then((disks) => {
         if (!cancelled) setDiskInventory(normalizeDiskInventory(disks));
       })
-      .catch(err => {
+      .catch((error) => {
         if (!cancelled) {
-          setDiskError(getInstallerApiErrorMessage(err, 'Erro ao carregar discos.'));
+          setDiskError(getInstallerApiErrorMessage(error, 'Erro ao carregar discos.'));
           setDiskInventory([]);
         }
       })
-      .finally(() => { if (!cancelled) setLoadingDisks(false); });
+      .finally(() => {
+        if (!cancelled) setLoadingDisks(false);
+      });
 
     return () => { cancelled = true; };
   }, [reloadKey]);
 
-  /* carregar partições para cada disco depois da lista chegar */
   useEffect(() => {
-    if (diskInventory.length === 0) return;
+    if (diskInventory.length === 0) return undefined;
     let cancelled = false;
 
-    diskInventory.forEach(disk => {
-      const devName = disk.name ?? disk.path?.split('/').pop();
-      if (!devName) return;
+    for (const disk of diskInventory) {
+      const key = diskPartKey(disk);
+      if (!key) continue;
 
-      fetch(`/api/disks/${encodeURIComponent(devName)}/partitions`)
-        .then(r => r.ok ? r.json() : Promise.reject(r.status))
-        .then(data => {
-          if (!cancelled) setPartitions(prev => ({ ...prev, [devName]: data }));
+      installerApi.getDiskPartitions(key)
+        .then((parts) => {
+          if (!cancelled) setPartitionsByDisk((previous) => ({ ...previous, [key]: normalizeCurrentPartitions(parts) }));
         })
-        .catch(() => {}); // falha silenciosa — barra fica vazia
-    });
+        .catch(() => {
+          if (!cancelled) setPartitionsByDisk((previous) => ({ ...previous, [key]: [] }));
+        });
+    }
 
     return () => { cancelled = true; };
   }, [diskInventory]);
 
-  /* ── derived state (preservado da versão original) ── */
-  const eligibleDisks  = useMemo(() => diskInventory.filter(d => d.eligible), [diskInventory]);
-  const eligiblePaths  = useMemo(() => new Set(eligibleDisks.map(d => d.path)), [eligibleDisks]);
-  const layoutMode     = wizard.diskProfile === 'raid' ? 'raid' : wizard.diskProfile === 'manual' ? 'manual' : wizard.diskMode === 'two' ? 'split' : 'single';
-  const raidMembers    = useMemo(() => getSelectedDiskRecords(diskInventory, wizard.selectedDisks), [diskInventory, wizard.selectedDisks]);
-  const raidMemberPaths = useMemo(() => raidMembers.map(d => d.path), [raidMembers]);
-  const raidOptions    = useMemo(() => getRaidOptionsForSelection(raidMembers), [raidMembers]);
-  const enabledRaidOptions = useMemo(() => raidOptions.filter(o => o.enabled), [raidOptions]);
-  const resolvedRaidLevel  = useMemo(() => {
-    if (enabledRaidOptions.some(o => o.id === wizard.raidLevel)) return wizard.raidLevel;
-    return enabledRaidOptions[0]?.id || wizard.raidLevel || 'raid1';
-  }, [enabledRaidOptions, wizard.raidLevel]);
+  const eligibleDisks = useMemo(() => diskInventory.filter((disk) => disk.eligible), [diskInventory]);
+  const eligiblePaths = useMemo(() => new Set(eligibleDisks.map((disk) => disk.path)), [eligibleDisks]);
+  const selectedPath = eligiblePaths.has(wizard.sysDisk) ? wizard.sysDisk : eligibleDisks[0]?.path || '';
+  const selectedDisk = useMemo(
+    () => eligibleDisks.find((disk) => disk.path === selectedPath) || null,
+    [eligibleDisks, selectedPath],
+  );
+  const selectedPartitions = selectedDisk ? partitionsByDisk[diskPartKey(selectedDisk)] || [] : [];
+  const recommendedPlan = useMemo(() => buildRecommendedPlan(selectedDisk, wizard), [selectedDisk, wizard]);
+  const manualPlan = useMemo(() => buildManualPlan(wizard.manualPartitions, selectedDisk), [wizard.manualPartitions, selectedDisk]);
+  const manualValidation = useMemo(
+    () => validateManualPartitions(wizard.manualPartitions, selectedDisk),
+    [wizard.manualPartitions, selectedDisk],
+  );
+  const isManualMode = wizard.diskProfile === 'manual';
+  const activePlan = isManualMode ? manualPlan : recommendedPlan;
+  const activeValidation = isManualMode
+    ? { blockingReasons: manualValidation.issues, warnings: manualValidation.warnings }
+    : validateSingleDiskLayout(diskInventory, selectedPath);
+  const enableSrvData = shouldRecommendSrvData(wizard.profileId, wizard.selectedFeatures);
 
-  const singleValidation = useMemo(() => validateSingleDiskLayout(diskInventory, wizard.sysDisk), [diskInventory, wizard.sysDisk]);
-  const splitValidation  = useMemo(() => validateSplitDiskLayout(diskInventory, wizard.sysDisk, wizard.dataDisk), [diskInventory, wizard.sysDisk, wizard.dataDisk]);
-  const raidValidation   = useMemo(() => validateRaidSelection(raidMembers, resolvedRaidLevel), [raidMembers, resolvedRaidLevel]);
-  const raidSummary      = useMemo(() => buildRaidPlanSummary(raidMembers, resolvedRaidLevel), [raidMembers, resolvedRaidLevel]);
-  const splitSummary     = useMemo(() => buildSplitPlanSummary(diskInventory, wizard.sysDisk, wizard.dataDisk), [diskInventory, wizard.sysDisk, wizard.dataDisk]);
-
-  const storageIssues   = layoutMode === 'raid' ? raidValidation.blockingReasons
-    : layoutMode === 'split' ? splitValidation.blockingReasons
-    : layoutMode === 'manual' ? [] // Validação específica via validateStep
-    : singleValidation.blockingReasons;
-  const storageWarnings = layoutMode === 'raid' ? raidValidation.warnings
-    : layoutMode === 'split' ? splitValidation.warnings
-    : layoutMode === 'manual' ? []
-    : singleValidation.warnings;
-
-  /* sync state → wizard */
   useEffect(() => {
     if (loadingDisks) return;
-    const firstEligible  = eligibleDisks[0]?.path || '';
-    const secondEligible = eligibleDisks.find(d => d.path !== firstEligible)?.path || '';
     const patch = {};
 
-    if (layoutMode === 'single') {
-      const nextSys = eligiblePaths.has(wizard.sysDisk) ? wizard.sysDisk : firstEligible;
-      if (wizard.diskProfile !== 'single') patch.diskProfile = 'single';
-      if (wizard.diskMode    !== 'one')    patch.diskMode    = 'one';
-      if (wizard.sysDisk     !== nextSys)  patch.sysDisk     = nextSys;
-      if (wizard.dataDisk)                 patch.dataDisk    = '';
-      if (!arraysEqual(wizard.selectedDisks || [], nextSys ? [nextSys] : [])) patch.selectedDisks = nextSys ? [nextSys] : [];
-      if (wizard.rootFs !== 'btrfs') patch.rootFs = 'btrfs';
-      if (wizard.dataFs !== 'btrfs') patch.dataFs = 'btrfs';
+    if (selectedPath && wizard.sysDisk !== selectedPath) patch.sysDisk = selectedPath;
+    if (!isManualMode && wizard.diskProfile !== 'single') patch.diskProfile = 'single';
+    if (wizard.diskMode !== 'one') patch.diskMode = 'one';
+    if (wizard.dataDisk) patch.dataDisk = '';
+    if (!isManualMode && !arraysEqual(wizard.selectedDisks || [], selectedPath ? [selectedPath] : [])) {
+      patch.selectedDisks = selectedPath ? [selectedPath] : [];
     }
+    if (!isManualMode && wizard.rootFs !== 'btrfs') patch.rootFs = 'btrfs';
+    if (!isManualMode && wizard.dataFs !== 'btrfs') patch.dataFs = 'btrfs';
 
-    if (!arraysEqual(storageIssues,   uiState.storageBlockingIssues || [])) patch.storageBlockingIssues = storageIssues;
-    if (!arraysEqual(storageWarnings, uiState.storageWarnings        || [])) patch.storageWarnings       = storageWarnings;
+    const storageIssues = activeValidation.blockingReasons || [];
+    const storageWarnings = activeValidation.warnings || [];
+    if (!arraysEqual(storageIssues, uiState.storageBlockingIssues || [])) patch.storageBlockingIssues = storageIssues;
+    if (!arraysEqual(storageWarnings, uiState.storageWarnings || [])) patch.storageWarnings = storageWarnings;
+
     if (Object.keys(patch).length > 0) onChange(patch);
-  }, [diskInventory, eligibleDisks, eligiblePaths, layoutMode, loadingDisks,
-      onChange, resolvedRaidLevel, storageIssues, storageWarnings,
-      uiState.storageBlockingIssues, uiState.storageWarnings,
-      wizard.dataDisk, wizard.dataFs, wizard.diskMode, wizard.diskProfile,
-      wizard.raidLevel, wizard.rootFs, wizard.selectedDisks, wizard.sysDisk]);
+  }, [
+    activeValidation.blockingReasons,
+    activeValidation.warnings,
+    isManualMode,
+    loadingDisks,
+    onChange,
+    selectedPath,
+    uiState.storageBlockingIssues,
+    uiState.storageWarnings,
+    wizard.dataDisk,
+    wizard.dataFs,
+    wizard.diskMode,
+    wizard.diskProfile,
+    wizard.rootFs,
+    wizard.selectedDisks,
+    wizard.sysDisk,
+  ]);
 
-  /* ── handler layout mode ── */
-  function handleLayoutChange(nextMode) {
-    const firstEligible  = eligibleDisks[0]?.path || '';
-    const secondEligible = eligibleDisks.find(d => d.path !== firstEligible)?.path || '';
-    if (nextMode === 'single') {
-      const nextSys = eligiblePaths.has(wizard.sysDisk) ? wizard.sysDisk : firstEligible;
-      onChange({ diskProfile: 'single', diskMode: 'one', sysDisk: nextSys, dataDisk: '', selectedDisks: nextSys ? [nextSys] : [], rootFs: 'btrfs', dataFs: 'btrfs' });
-    } else if (nextMode === 'split') {
-      const nextSys  = eligiblePaths.has(wizard.sysDisk) ? wizard.sysDisk : firstEligible;
-      const nextData = eligiblePaths.has(wizard.dataDisk) && wizard.dataDisk !== nextSys ? wizard.dataDisk : secondEligible;
-      onChange({ diskProfile: 'single', diskMode: 'two', sysDisk: nextSys, dataDisk: nextData, selectedDisks: uniqueStrings([nextSys, nextData]) });
-    } else if (nextMode === 'raid') {
-      const members = eligibleDisks.slice(0, 2).map(d => d.path);
-      onChange({ diskProfile: 'raid', diskMode: 'one', sysDisk: members[0] || '', dataDisk: '', selectedDisks: members, rootFs: 'btrfs', dataFs: 'btrfs', raidLevel: resolvedRaidLevel });
-      setActiveTab(3); // Jump to RAID tab
-    } else if (nextMode === 'manual') {
-      onChange({ diskProfile: 'manual', diskMode: 'one', sysDisk: wizard.sysDisk || firstEligible, dataDisk: '', selectedDisks: [wizard.sysDisk || firstEligible] });
-      setActiveTab(2); // Jump to Manual tab
-    }
+  function selectDisk(path) {
+    if (!eligiblePaths.has(path)) return;
+    onChange({
+      diskProfile: 'single',
+      diskMode: 'one',
+      sysDisk: path,
+      dataDisk: '',
+      selectedDisks: [path],
+      rootFs: 'btrfs',
+      dataFs: 'btrfs',
+      manualPartitions: [],
+    });
   }
 
-  /* ── render ── */
+  function useRecommended() {
+    if (!selectedPath) return;
+    onChange({
+      diskProfile: 'single',
+      diskMode: 'one',
+      sysDisk: selectedPath,
+      dataDisk: '',
+      selectedDisks: [selectedPath],
+      rootFs: 'btrfs',
+      dataFs: 'btrfs',
+      manualPartitions: [],
+    });
+    setManualOpen(false);
+  }
+
+  function openManual() {
+    if (!selectedDisk) return;
+    const initialManual = Array.isArray(wizard.manualPartitions) && wizard.manualPartitions.length > 0
+      ? wizard.manualPartitions
+      : [
+        { device: selectedPath, mountpoint: '/boot/efi', fstype: 'vfat', size: '512M', format: true },
+        { device: selectedPath, mountpoint: '/', fstype: 'btrfs', size: '100%', format: true },
+      ];
+
+    onChange({
+      diskProfile: 'manual',
+      diskMode: 'one',
+      sysDisk: selectedPath,
+      dataDisk: '',
+      selectedDisks: [selectedPath],
+      manualPartitions: initialManual,
+    });
+    setManualOpen(true);
+  }
+
+  const blockedDisks = diskInventory.filter((disk) => !disk.eligible);
+
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', height: '100%', minHeight: 0 }}>
+    <div className="disk-cockpit">
+      <header className="disk-cockpit-header">
+        <div>
+          <div className="eyebrow">Configuração de armazenamento</div>
+          <h2>Disco</h2>
+          <p>Escolha o disco alvo, revise o layout que será criado e avance com um plano claro antes de qualquer operação destrutiva.</p>
+        </div>
+        <button
+          type="button"
+          className="btn-secondary"
+          onClick={() => setReloadKey((key) => key + 1)}
+          disabled={loadingDisks}
+        >
+          Atualizar discos
+        </button>
+      </header>
 
-      {/* Barra de 4 abas */}
-      <div className="tab-bar">
-        {TABS.map((label, i) => (
-          <button
-            key={label}
-            type="button"
-            className={`tab${activeTab === i ? ' active' : ''}`}
-            onClick={() => setActiveTab(i)}
-          >
-            {label}
-          </button>
-        ))}
+      <div className="disk-cockpit-grid">
+        <section className="disk-section">
+          <div className="disk-section-header">
+            <div>
+              <h3>Disco alvo</h3>
+              <p>{eligibleDisks.length} disco(s) elegíveis detectados pelo backend.</p>
+            </div>
+          </div>
+
+          {loadingDisks ? (
+            <div className="disk-loading">
+              <div className="scan-dot" />
+              Detectando discos…
+            </div>
+          ) : diskError ? (
+            <div className="disk-error">Erro ao carregar discos: {diskError}</div>
+          ) : eligibleDisks.length === 0 ? (
+            <div className="disk-error">Nenhum disco elegível detectado para instalação.</div>
+          ) : (
+            <div className="disk-card-list">
+              {eligibleDisks.map((disk, index) => (
+                <DiskCard
+                  key={disk.path}
+                  disk={disk}
+                  selected={disk.path === selectedPath}
+                  onSelect={() => selectDisk(disk.path)}
+                />
+              ))}
+            </div>
+          )}
+
+          {blockedDisks.length > 0 ? (
+            <details className="blocked-disks">
+              <summary>Ver discos bloqueados ({blockedDisks.length})</summary>
+              <div className="disk-card-list">
+                {blockedDisks.map((disk) => (
+                  <DiskCard
+                    key={disk.path}
+                    disk={disk}
+                    selected={false}
+                    onSelect={() => {}}
+                  />
+                ))}
+              </div>
+            </details>
+          ) : null}
+        </section>
+
+        <section className="disk-section">
+          <RecommendedLayoutCard
+            selectedDisk={selectedDisk}
+            wizard={wizard}
+            isManualMode={isManualMode}
+          />
+
+          <div className="disk-plan-compare">
+            <PartitionBar
+              title="Estado atual do disco"
+              subtitle={selectedDisk ? diskLabel(selectedDisk) : 'Nenhum disco selecionado'}
+              parts={selectedPartitions}
+              totalBytes={diskSizeBytes(selectedDisk)}
+              emptyLabel="sem partições detectadas"
+            />
+            <PartitionBar
+              title="Como ficará após a instalação"
+              subtitle={isManualMode ? 'Plano manual sincronizado' : 'Layout automático recomendado'}
+              parts={activePlan}
+              totalBytes={diskSizeBytes(selectedDisk)}
+              emptyLabel="selecione um disco para gerar o preview"
+            />
+          </div>
+
+          {(activeValidation.blockingReasons?.length > 0 || activeValidation.warnings?.length > 0) ? (
+            <div className="disk-validation" role="alert">
+              {(activeValidation.blockingReasons || []).map((issue) => (
+                <div key={issue} className="validation-item danger">
+                  <span className="validation-icon" aria-hidden="true">✕</span>
+                  {issue}
+                </div>
+              ))}
+              {(activeValidation.warnings || []).map((warning) => (
+                <div key={warning} className="validation-item warning">
+                  <span className="validation-icon" aria-hidden="true">⚠</span>
+                  {warning}
+                </div>
+              ))}
+            </div>
+          ) : (
+            <div className="disk-validation">
+              <div className="validation-item ok">
+                <span className="validation-icon" aria-hidden="true">✓</span>
+                Plano pronto para validação final no dry-run do backend.
+              </div>
+            </div>
+          )}
+
+          <div className="disk-risk-callout">
+            <div className="risk-icon" aria-hidden="true">⚠</div>
+            <div className="risk-content">
+              <strong>Impacto: </strong>a instalação apaga e reparticiona o disco selecionado quando executada.
+              Esta tela só prepara o plano; a confirmação destrutiva final continua nas próximas etapas.
+            </div>
+          </div>
+
+          <div className="disk-actions">
+            <button
+              type="button"
+              className="btn-primary"
+              disabled={!selectedDisk || isManualMode}
+              onClick={useRecommended}
+            >
+              Usar layout recomendado
+            </button>
+            <button
+              type="button"
+              className="btn-secondary"
+              disabled={!selectedDisk}
+              onClick={openManual}
+            >
+              Ajustar manualmente
+            </button>
+            {isManualMode && (
+              <button
+                type="button"
+                className="btn-ghost"
+                onClick={useRecommended}
+              >
+                Voltar ao automático
+              </button>
+            )}
+          </div>
+        </section>
       </div>
 
-      {/* Conteúdo da aba ativa */}
-      <div style={{ flex: 1, minHeight: 0, overflow: 'hidden auto' }}>
-        {activeTab === 0 && (
-          <TabDiscos
-            diskInventory={diskInventory}
-            loadingDisks={loadingDisks}
-            diskError={diskError}
-            partitions={partitions}
-            wizard={wizard}
-            onChange={onChange}
-            eligibleDisks={eligibleDisks}
-            eligiblePaths={eligiblePaths}
-            onReload={reloadDisks}
-          />
-        )}
-        {activeTab === 1 && (
-          <TabLayout
-            layoutMode={layoutMode}
-            onLayoutChange={handleLayoutChange}
-            wizard={wizard}
-            diskInventory={diskInventory}
-            splitSummary={splitSummary}
-            raidSummary={raidSummary}
-            raidOptions={raidOptions}
-          />
-        )}
-        {activeTab === 2 && (
-          <TabManual
-            wizard={wizard}
-            onChange={onChange}
-            eligibleDisks={eligibleDisks}
-          />
-        )}
-        {activeTab === 3 && (
-          <TabRAID
-            wizard={wizard}
-            onChange={onChange}
-            eligibleDisks={eligibleDisks}
-          />
-        )}
-      </div>
-
+      {manualOpen ? (
+        <ManualDrawer
+          wizard={wizard}
+          selectedDisk={selectedDisk}
+          manualValidation={manualValidation}
+          onChange={onChange}
+          onClose={() => setManualOpen(false)}
+          onUseRecommended={useRecommended}
+        />
+      ) : null}
     </div>
   );
 }
-

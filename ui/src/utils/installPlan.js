@@ -497,8 +497,10 @@ export function validateStep(stepId, draftInput, uiInput = {}) {
       if (payload.network.wan.interface && !uiState.wanIdentified) {
         addWarning(result, 'A porta WAN ainda não foi confirmada fisicamente.');
       }
-      if (!uiState.lanIdentified) {
-        addWarning(result, 'A porta LAN/PXE ainda não foi confirmada fisicamente.');
+      if (uiState.netIfacesCount > 1) {
+        if (!uiState.lanIdentified) {
+          addBlockingIssue(result, 'A porta LAN/PXE deve ser confirmada fisicamente.');
+        }
       }
       return result;
     case 'disks': {

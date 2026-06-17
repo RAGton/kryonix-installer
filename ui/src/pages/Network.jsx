@@ -468,16 +468,22 @@ export default function Network({ wizard, onChange, validation }) {
               </div>
             </div>
 
-            <label className="mt-4 flex items-center gap-2 rounded-xl border border-white/10 bg-slate-950/60 px-3 py-2.5 text-sm text-slate-200">
-              <input
-                type="checkbox"
-                className="h-4 w-4 rounded"
-                checked={Boolean(wizard.lanIdentified)}
-                onChange={(event) => onChange({ lanIdentified: event.target.checked })}
-                disabled={netApplyBusy}
-              />
-              Confirmei fisicamente a interface LAN/PXE ({wizard.mgmtInterface || 'não selecionada'}).
-            </label>
+            {interfaces.length > 1 ? (
+              <label className="mt-4 flex items-center gap-2 rounded-xl border border-white/10 bg-slate-950/60 px-3 py-2.5 text-sm text-slate-200">
+                <input
+                  type="checkbox"
+                  className="h-4 w-4 rounded"
+                  checked={Boolean(wizard.lanIdentified)}
+                  onChange={(event) => onChange({ lanIdentified: event.target.checked })}
+                  disabled={netApplyBusy}
+                />
+                Confirmei fisicamente a interface LAN/PXE ({wizard.mgmtInterface || 'não selecionada'}).
+              </label>
+            ) : (
+              <div className="mt-4 rounded-xl border border-white/5 bg-white/[0.01] px-3 py-2 text-xs text-slate-400 italic">
+                Interface única detectada. Confirmação física simplificada automaticamente.
+              </div>
+            )}
           </div>
 
           <div className="rounded-2xl border border-white/10 bg-white/[0.03] p-4">
