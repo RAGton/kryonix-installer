@@ -152,7 +152,7 @@ export default function Summary({ wizard, uiState, onChange, validation }) {
           if (json.admin.authorizedKeys) draftPatch.adminAuthorizedKeys = json.admin.authorizedKeys.join('\n');
         }
         if (json.profile?.id) draftPatch.profileId = json.profile.id;
-        if (json.remoteAccess?.enabled !== undefined) draftPatch.remoteAccessEnabled = json.remoteAccess.enabled;
+        if (json.remoteAccess?.enabled !== undefined) draftPatch.targetRemoteAccessEnabled = json.remoteAccess.enabled;
         if (json.security?.allowWeakPassword !== undefined) draftPatch.allowWeakPassword = json.security.allowWeakPassword;
 
         onChange(draftPatch);
@@ -181,7 +181,7 @@ export default function Summary({ wizard, uiState, onChange, validation }) {
             <div className="text-xs font-semibold uppercase tracking-[0.24em] text-slate-400">Instalação & Host</div>
             <div className="mt-2 text-sm text-white">Hostname: {wizard.hostName || 'pendente'}</div>
             <div className="mt-1 text-sm text-slate-300">Fonte: {formatSourceKind(wizard.sourceKind)}</div>
-            <div className="mt-1 text-sm text-slate-400">Acesso Remoto: {wizard.remoteAccessEnabled ? 'Ativado' : 'Desativado'}</div>
+            <div className="mt-1 text-sm text-slate-400">Acesso Remoto: {wizard.targetRemoteAccessEnabled ? 'Ativado' : 'Desativado'}</div>
             <div className="mt-1 text-sm text-slate-400">
               Perfil: {profileObj ? profileObj.name : 'Nenhum'}
             </div>

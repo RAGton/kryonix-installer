@@ -522,3 +522,52 @@ test('WAN expand/collapse nao afeta campos de rede no payload', () => {
   assert.equal(plan2.network.wan.interface, '');
   assert.equal(plan2.network.wan.mode, 'dhcp');
 });
+
+test('contract: buildInstallPlanPayload preserva fields de contract e exclui senhas', () => {
+  const draft = createValidDraft({
+    selectedFeatures: ['ai.ollama', 'network.openssh'],
+    adminAuthorizedKeys: 'ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAI test\nssh-rsa AAAAB3... test2\n',
+    targetRemoteAccessEnabled: true,
+    adminPassword: 'SuperSecretPassword123!',
+    adminPasswordConfirm: 'SuperSecretPassword123!',
+    adminEmail: 'admin@kryonix.local',
+    adminUid: 1000,
+  });
+
+  const plan = buildInstallPlanPayload(draft);
+
+  // Features agrupadas e preservadas
+  assert.ok(plan.features.system['ai.ollama'], 'Feature de IA deve estar presente');
+  assert.ok(plan.features.remote['network.openssh'], 'Feature de openssh deve estar presente');
+
+  // authorizedKeys processado e preservado
+  assert.equal(plan.admin.authorizedKeys.length, 2, 'Deve ter processado 2 chaves SSH');
+  assert.equal(plan.admin.authorizedKeys[0], 'ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAI test');
+
+  // Controle de acesso
+  assert.equal(plan.targetRemoteAccess.enabled, true, 'Remote access deve estar enabled');
+
+  // Dados do usuário informativos
+  assert.equal(plan.admin.email, 'admin@kryonix.local');
+  assert.equal(plan.admin.uid, 1000);
+
+  // SECURITY: Senha NÃO deve estar no payload de plano
+  assert.equal(plan.admin.adminPassword, undefined, 'Senha admin nao pode estar no plan');
+  assert.equal(plan.admin.password, undefined, 'Senha admin nao pode estar no plan');
+  assert.equal(plan.adminPassword, undefined, 'Senha admin nao pode estar no plan');
+});
+
+test('contract: buildInstallSecretsPayload isola senhas corretamente', () => {
+  const draft = createValidDraft({
+    adminPassword: 'SuperSecretPassword123!',
+    adminPasswordConfirm: 'SuperSecretPassword123!',
+    pppoePassword: 'PppoeSecret!',
+    wanMode: 'pppoe',
+  });
+
+  const secrets = buildInstallSecretsPayload(draft);
+
+  assert.equal(secrets.adminPassword, 'SuperSecretPassword123!');
+  assert.equal(secrets.adminPasswordConfirm, 'SuperSecretPassword123!');
+  assert.equal(secrets.wanPppoePassword, 'PppoeSecret!');
+});

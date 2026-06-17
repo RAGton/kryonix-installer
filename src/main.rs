@@ -95,6 +95,10 @@ pub struct InstallPlan {
     pub features: serde_json::Value,
     #[serde(default)]
     pub network: NetworkPlan,
+    /// Controla se openssh deve ser habilitado no sistema instalado.
+    /// Mapeado de `remoteAccess.enabled` pelo mapper da UI.
+    #[serde(rename = "target_remote_access", default)]
+    pub target_remote_access: TargetRemoteAccessPlan,
 }
 
 #[derive(Serialize, Deserialize, Clone, Default)]
@@ -147,10 +151,30 @@ pub struct PartitionSpec {
     pub format: bool,
 }
 
+fn default_user_uid() -> u32 {
+    1000
+}
+
 #[derive(Serialize, Deserialize, Clone)]
 pub struct PlanUser {
     pub name: String,
     pub admin: bool,
+    /// UID do usuário no sistema instalado (informativo; não é segredo)
+    #[serde(default = "default_user_uid")]
+    pub uid: u32,
+    /// E-mail do administrador (informativo; não é segredo)
+    #[serde(default)]
+    pub email: String,
+    /// Chaves SSH públicas autorizadas — chaves públicas não são segredos
+    #[serde(rename = "authorized_keys", default)]
+    pub authorized_keys: Vec<String>,
+}
+
+/// Controle de acesso remoto: se true, `services.openssh.enable` é emitido
+/// no `features.generated.nix` do target.
+#[derive(Serialize, Deserialize, Clone, Default)]
+pub struct TargetRemoteAccessPlan {
+    pub enabled: bool,
 }
 
 // ── Dry-run / validation types ────────────────────────────────────────────────
@@ -495,9 +519,13 @@ async fn plan(Json(req): Json<PlanRequest>) -> Json<InstallPlan> {
         user: PlanUser {
             name: req.user.name,
             admin: req.user.admin.unwrap_or(true),
+            uid: 1000,
+            email: String::new(),
+            authorized_keys: vec![],
         },
         features: req.features.unwrap_or(serde_json::json!({})),
         network: Default::default(),
+        target_remote_access: Default::default(),
     })
 }
 
@@ -934,10 +962,122 @@ mod tests {
             user: PlanUser {
                 name: user.into(),
                 admin: true,
+                uid: 1000,
+                email: String::new(),
+                authorized_keys: vec![],
             },
             features: serde_json::json!({}),
             network: Default::default(),
+            target_remote_access: Default::default(),
         }
+    }
+
+    // ── Testes de contrato UI↔backend ─────────────────────────────────────────
+
+    /// Garante que InstallPlan desserializa um payload real da UI
+    /// com features não-vazias, authorized_keys e target_remote_access.
+    #[test]
+    fn test_install_plan_deserializes_real_ui_payload() {
+        // Fixture gerada pelo mapper da UI (buildKryonixInstallPlan)
+        // NOTA: Nenhuma senha aqui — senhas trafegam via canal separado.
+        let json = serde_json::json!({
+            "version": 1,
+            "hostname": "kryonix-srv",
+            "timezone": "America/Cuiaba",
+            "locale": "pt_BR.UTF-8",
+            "keyboard": "br-abnt2",
+            "disk": {
+                "mode": "dry-run",
+                "target": "/dev/sda",
+                "layout": "btrfs-simple",
+                "boot_mode": "uefi",
+                "profile": "single",
+                "selectedDisks": ["/dev/sda"]
+            },
+            "user": {
+                "name": "rag",
+                "admin": true,
+                "uid": 1000,
+                "email": "admin@kryonix.local",
+                "authorized_keys": ["ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAI test-key"]
+            },
+            "features": {
+                "system": { "ai.ollama": true },
+                "remote": { "remote.openssh": true }
+            },
+            "target_remote_access": { "enabled": true },
+            "network": {
+                "hostname": "kryonix-srv",
+                "interface": "enp1s0",
+                "server_ip": "10.0.0.10",
+                "prefix_length": 24,
+                "mode": "dhcp",
+                "gateway": "10.0.0.1",
+                "dns": ["1.1.1.1"],
+                "http_port": 8080,
+                "wan": { "interface": "", "mode": "dhcp", "dns": [] }
+            }
+        });
+
+        let plan: InstallPlan = serde_json::from_value(json)
+            .expect("InstallPlan deve desserializar payload real da UI");
+
+        assert_eq!(plan.user.name, "rag");
+        assert_eq!(plan.user.uid, 1000);
+        assert_eq!(plan.user.email, "admin@kryonix.local");
+        assert_eq!(plan.user.authorized_keys.len(), 1);
+        assert!(plan.user.authorized_keys[0].starts_with("ssh-ed25519"));
+        assert!(plan.target_remote_access.enabled);
+        assert_eq!(
+            plan.features.get("system").and_then(|s| s.get("ai.ollama")),
+            Some(&serde_json::Value::Bool(true))
+        );
+    }
+
+    /// Garante que InstallPlan aceita authorized_keys vazio (campo opcional).
+    #[test]
+    fn test_install_plan_accepts_empty_authorized_keys() {
+        let json = serde_json::json!({
+            "version": 1,
+            "hostname": "kryonix",
+            "timezone": "America/Cuiaba",
+            "locale": "pt_BR.UTF-8",
+            "keyboard": "br-abnt2",
+            "disk": {
+                "mode": "dry-run",
+                "target": "/dev/sda",
+                "layout": "btrfs-simple",
+                "boot_mode": "uefi",
+                "profile": "single",
+                "selectedDisks": ["/dev/sda"]
+            },
+            "user": { "name": "admin", "admin": true },
+            "features": {}
+        });
+
+        let plan: InstallPlan = serde_json::from_value(json)
+            .expect("InstallPlan deve aceitar user sem authorized_keys");
+
+        assert!(plan.user.authorized_keys.is_empty());
+        assert!(!plan.target_remote_access.enabled);
+    }
+
+    /// Garante que PlanUser NÃO tem campo de senha.
+    /// (A prova real é a compilação — este teste documenta a intenção.)
+    #[test]
+    fn test_plan_user_has_no_password_field() {
+        let user = PlanUser {
+            name: "admin".into(),
+            admin: true,
+            uid: 1000,
+            email: "a@b.com".into(),
+            authorized_keys: vec![],
+        };
+        let json = serde_json::to_string(&user).unwrap();
+        // A serialização não deve conter nenhum campo de senha
+        assert!(!json.contains("password"));
+        assert!(!json.contains("senha"));
+        assert!(!json.contains("secret"));
     }
 
     #[test]

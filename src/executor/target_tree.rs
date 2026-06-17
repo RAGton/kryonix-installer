@@ -504,25 +504,83 @@ fn network_body(plan: &InstallPlan) -> String {
     lines.join("\n")
 }
 
-async fn write_users_generated(plan: &InstallPlan) -> Result<(), String> {
+pub fn render_users_generated(plan: &InstallPlan) -> String {
     let user = sanitize_user(&plan.user.name);
     let admin = plan.user.admin;
+
+    // Fallback de segurança caso chegue UID inválido do frontend
+    let uid = if plan.user.uid >= 1000 {
+        plan.user.uid
+    } else {
+        1000
+    };
+
     let groups = if admin {
         r#"[ "wheel" "networkmanager" "video" "audio" ]"#
     } else {
         r#"[ "networkmanager" "video" "audio" ]"#
     };
-    let content = format!(
+
+    // Chaves SSH públicas autorizadas (não são segredos)
+    let ssh_keys_block = if plan.user.authorized_keys.is_empty() {
+        String::new()
+    } else {
+        let valid_prefixes = [
+            "ssh-ed25519 ",
+            "ssh-rsa ",
+            "ecdsa-sha2-nistp256 ",
+            "ecdsa-sha2-nistp384 ",
+            "ecdsa-sha2-nistp521 ",
+            "sk-ssh-ed25519@openssh.com ",
+            "sk-ecdsa-sha2-nistp256@openssh.com ",
+        ];
+
+        let keys_nix = plan
+            .user
+            .authorized_keys
+            .iter()
+            .map(|k| k.trim())
+            .filter(|k| !k.is_empty())
+            .filter(|k| !k.contains('\n') && !k.contains('\r'))
+            .filter(|k| valid_prefixes.iter().any(|&p| k.starts_with(p)))
+            .map(|k| {
+                // Escapar para string normal do Nix ("...")
+                let escaped = k
+                    .replace('\\', "\\\\")
+                    .replace('"', "\\\"")
+                    .replace("${", "\\${");
+                format!("      \"{}\"\n", escaped)
+            })
+            .collect::<String>();
+
+        if keys_nix.is_empty() {
+            String::new()
+        } else {
+            format!("    openssh.authorizedKeys.keys = [\n{}    ];\n", keys_nix)
+        }
+    };
+
+    format!(
         r#"{{ config, lib, pkgs, ... }}:
 {{
   users.users.{user} = {{
     isNormalUser = true;
     description = "{user}";
+    uid = {uid};
     extraGroups = {groups};
+{ssh_keys}
   }};
 }}
 "#,
-    );
+        user = user,
+        uid = uid,
+        groups = groups,
+        ssh_keys = ssh_keys_block,
+    )
+}
+
+async fn write_users_generated(plan: &InstallPlan) -> Result<(), String> {
+    let content = render_users_generated(plan);
     let path = format!("{GENERATED_DIR}/users.generated.nix");
     tokio::fs::write(&path, content)
         .await
@@ -535,6 +593,21 @@ async fn write_features_generated(plan: &InstallPlan) -> Result<(), String> {
     let locale = plan.locale.trim();
     let keyboard = plan.keyboard.trim();
     let features = render_features(plan);
+
+    // O SSH do sistema instalado é habilitado se target_remote_access for true
+    // OU se a feature 'network.openssh' foi selecionada no wizard.
+    let has_openssh_feature = plan
+        .features
+        .get("network")
+        .and_then(|n| n.get("network.openssh"))
+        .and_then(|v| v.as_bool())
+        .unwrap_or(false);
+    let openssh_block = if plan.target_remote_access.enabled || has_openssh_feature {
+        "  services.openssh.enable = true;\n"
+    } else {
+        ""
+    };
+
     // Como NÃO importamos `kryonix.nixosModules.default`, precisamos prover
     // os fundamentos que `hosts/common` daria: stateVersion, nix flakes
     // settings e essential packages. Mantemos minimalista — features
@@ -562,7 +635,7 @@ async fn write_features_generated(plan: &InstallPlan) -> Result<(), String> {
     htop
   ];
 
-{features}
+{openssh_block}{features}
 }}
 "#,
     );
@@ -978,5 +1051,52 @@ mod tests {
         assert!(snippet.contains("path:./engine"));
         assert!(!snippet.contains("path:../kryonix"));
         assert!(!snippet.contains("path:/nix/store"));
+    }
+
+    #[test]
+    fn test_write_users_generated_validates_ssh_keys() {
+        use crate::{InstallPlan, PlanDisk, PlanUser, TargetRemoteAccessPlan};
+        let mut plan = InstallPlan {
+            version: 1,
+            hostname: "test".into(),
+            timezone: "UTC".into(),
+            locale: "en_US.UTF-8".into(),
+            keyboard: "us".into(),
+            disk: PlanDisk {
+                mode: "dry-run".into(),
+                target: "/dev/sda".into(),
+                layout: "btrfs-simple".into(),
+                boot_mode: "uefi".into(),
+                profile: "single".into(),
+                selected_disks: vec!["/dev/sda".into()],
+                raid_level: None,
+                manual_partitions: None,
+            },
+            user: PlanUser {
+                name: "tester".into(),
+                admin: false,
+                uid: 1000,
+                email: "".into(),
+                authorized_keys: vec![
+                    "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAI test-key".into(), // valid
+                    "ssh-rsa AAAAB3NzaC1...".into(),                         // valid
+                    "invalid-key-algo AAAAB3...".into(),                     // invalid algorithm
+                    "ssh-ed25519 AAA\nBBB".into(),                           // invalid newline
+                    "ssh-ed25519 ${builtins.readFile \"/etc/shadow\"}".into(), // valid algo, but trying nix injection
+                ],
+            },
+            features: serde_json::json!({}),
+            network: Default::default(),
+            target_remote_access: TargetRemoteAccessPlan { enabled: true },
+        };
+
+        let content = super::render_users_generated(&plan);
+
+        assert!(content.contains("\"ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAI test-key\""));
+        assert!(content.contains("\"ssh-rsa AAAAB3NzaC1...\""));
+        assert!(!content.contains("invalid-key-algo"));
+        assert!(!content.contains("BBB")); // newlines blocked
+        // Check escaping of ${
+        assert!(content.contains("\\${builtins.readFile \\\"/etc/shadow\\\"}"));
     }
 }

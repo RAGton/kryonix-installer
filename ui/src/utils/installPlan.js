@@ -232,8 +232,8 @@ export function buildInstallPlanPayload(draftInput) {
     security: {
       allowWeakPassword: Boolean(draft.allowWeakPassword),
     },
-    remoteAccess: {
-      enabled: Boolean(draft.remoteAccessEnabled),
+    targetRemoteAccess: {
+      enabled: Boolean(draft.targetRemoteAccessEnabled),
       port: 8080,
     },
     disk: {
