@@ -119,7 +119,7 @@ pub async fn write_install_flag() -> Result<(), String> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::{PlanDisk, PlanUser};
+    use crate::PlanUser;
 
     fn plan_with(profile: &str, target: &str, selected: Vec<&str>) -> InstallPlan {
         InstallPlan {

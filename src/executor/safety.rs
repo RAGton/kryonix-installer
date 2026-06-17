@@ -272,7 +272,7 @@ mod tests {
     #[test]
     fn test_safety_check_names_are_unique() {
         // Dummy plan — target /dev/null (never system disk, 0 bytes)
-        use crate::{PlanDisk, PlanUser};
+        use crate::PlanUser;
         let plan = InstallPlan {
             version: 1,
             hostname: "test-safety".into(),
