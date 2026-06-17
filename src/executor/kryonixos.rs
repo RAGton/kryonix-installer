@@ -21,7 +21,7 @@ pub async fn generate_kryonixos_tree(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::{InstallPlan, PlanDisk, PlanUser};
+    use crate::{InstallPlan, PlanUser};
 
     fn make_test_plan() -> InstallPlan {
         InstallPlan {

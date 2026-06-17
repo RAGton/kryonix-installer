@@ -221,7 +221,7 @@ export default function Install({ draft, uiState, validation, onChange }) {
         </div>
       </section>
 
-      <section className="flex min-h-0 flex-col overflow-hidden rounded-3xl border border-emerald-400/20 bg-[#050b06] shadow-[0_0_0_1px_rgba(16,185,129,0.08)]">
+      <section className="flex min-h-0 flex-col overflow-hidden rounded-3xl border border-emerald-400/20 bg-[var(--term-bg-soft)] shadow-[0_0_0_1px_rgba(16,185,129,0.08)]">
         <div className="flex items-center justify-between gap-4 border-b border-emerald-400/10 px-5 py-4">
           <div>
             <div className="text-xs font-semibold uppercase tracking-[0.28em] text-emerald-400/80">Terminal de instalacao</div>
@@ -244,7 +244,7 @@ export default function Install({ draft, uiState, validation, onChange }) {
         <pre
           ref={logRef}
           onScroll={handleLogScroll}
-          className="min-h-[240px] max-h-[420px] flex-1 overflow-y-auto overflow-x-auto whitespace-pre-wrap break-words font-mono bg-[#020703] px-5 py-4 text-xs leading-6 text-[#9ef7bd]"
+          className="min-h-[240px] max-h-[420px] flex-1 overflow-auto whitespace-pre-wrap break-words font-mono bg-[var(--term-bg)] px-5 py-4 text-xs leading-6 text-[var(--term-fg)]"
         >
           {executionState.logTail}
         </pre>

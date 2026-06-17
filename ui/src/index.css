@@ -20,6 +20,15 @@
   --success:  #a6e3a1;
   --danger:   #f38ba8;
   --warning:  #f9e2af;
+  /* Paleta oficial do console/terminal do instalador (verde sobre preto).
+     Deliberadamente distinta do HUD azul — referencie estes tokens em vez de
+     hex soltos (bg-[var(--term-bg)]) para eliminar o branding drift. */
+  --term-bg:      #020703;
+  --term-bg-soft: #050b06;
+  --term-fg:      #9ef7bd;
+  /* DiskVisualizer: barras de particionamento (tokenizadas, sem hex solto). */
+  --space-blue:    #1d3a5f;   /* espaço livre */
+  --disk-existing: #353d48;   /* partições já existentes (cinza) */
   --r:        8px;
   --rlg:      12px;
   --font:     'JetBrains Mono', 'Courier New', monospace;

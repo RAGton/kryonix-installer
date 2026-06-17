@@ -1056,7 +1056,7 @@ mod tests {
     #[test]
     fn test_write_users_generated_validates_ssh_keys() {
         use crate::{InstallPlan, PlanDisk, PlanUser, TargetRemoteAccessPlan};
-        let mut plan = InstallPlan {
+        let plan = InstallPlan {
             version: 1,
             hostname: "test".into(),
             timezone: "UTC".into(),

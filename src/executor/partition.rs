@@ -79,6 +79,16 @@ fn generate_disko_config_manual(plan: &InstallPlan) -> String {
 
         for (idx, p) in p_list.iter().enumerate() {
             let part_name = format!("p{}", idx + 1);
+            // ESP precisa do GPT type "EF00" para o bootloader localizar a EFI
+            // System Partition. Sem isto, o disko cria a vfat sem flag de boot e
+            // o systemd-boot/grub não acha o /boot na instalação manual.
+            let part_type = if matches!(p.mountpoint.as_str(), "/boot" | "/boot/efi" | "/efi")
+                && p.fstype == "vfat"
+            {
+                "\n            type = \"EF00\";"
+            } else {
+                ""
+            };
             let content = if p.format {
                 format!(
                     r#"content = {{ type = "filesystem"; format = "{}"; mountpoint = "{}"; }};"#,
@@ -93,10 +103,10 @@ fn generate_disko_config_manual(plan: &InstallPlan) -> String {
 
             part_configs.push(format!(
                 r#"          {} = {{
-            size = "{}";
+            size = "{}";{}
             {}
           }};"#,
-                part_name, p.size, content
+                part_name, p.size, part_type, content
             ));
         }
 
@@ -250,5 +260,95 @@ mod tests {
     fn test_btrfs_bios_no_efi_partition() {
         let cfg = generate_btrfs_simple("/dev/vdb", "bios");
         assert!(!cfg.contains("EF00"));
+    }
+
+    fn manual_plan(parts: Vec<crate::PartitionSpec>) -> InstallPlan {
+        use crate::{PlanDisk, PlanUser, TargetRemoteAccessPlan};
+        InstallPlan {
+            version: 1,
+            hostname: "test".into(),
+            timezone: "UTC".into(),
+            locale: "en_US.UTF-8".into(),
+            keyboard: "us".into(),
+            target_remote_access: TargetRemoteAccessPlan { enabled: false },
+            disk: PlanDisk {
+                mode: "install".into(),
+                target: "/dev/vdb".into(),
+                layout: "manual".into(),
+                boot_mode: "uefi".into(),
+                profile: "manual".into(),
+                selected_disks: vec![],
+                raid_level: None,
+                manual_partitions: Some(parts),
+            },
+            user: PlanUser {
+                name: "admin".into(),
+                admin: true,
+                uid: 1000,
+                email: "".into(),
+                authorized_keys: vec![],
+            },
+            features: serde_json::json!({}),
+            network: Default::default(),
+        }
+    }
+
+    #[test]
+    fn test_manual_config_is_dynamic_and_marks_esp_ef00() {
+        let plan = manual_plan(vec![
+            crate::PartitionSpec {
+                device: "/dev/vdb".into(),
+                mountpoint: "/boot".into(),
+                fstype: "vfat".into(),
+                size: "512M".into(),
+                format: true,
+            },
+            crate::PartitionSpec {
+                device: "/dev/vdb".into(),
+                mountpoint: "/".into(),
+                fstype: "btrfs".into(),
+                size: "100%".into(),
+                format: true,
+            },
+        ]);
+        let cfg = generate_disko_config(&plan);
+        // Geração dinâmica a partir das partições recebidas (não template estático).
+        assert!(cfg.contains("/dev/vdb"));
+        assert!(cfg.contains(r#"mountpoint = "/boot""#));
+        assert!(cfg.contains(r#"mountpoint = "/""#));
+        assert!(cfg.contains(r#"size = "512M""#));
+        // ESP recebe type EF00; partição root NÃO.
+        assert!(
+            cfg.contains("EF00"),
+            "ESP vfat em /boot deve receber type EF00"
+        );
+        assert_eq!(cfg.matches("EF00").count(), 1, "apenas o ESP deve ser EF00");
+    }
+
+    #[test]
+    fn test_manual_esp_ef00_matrix() {
+        // ESP (vfat em /boot|/boot/efi|/efi) recebe EF00; o resto não.
+        let cases = [
+            ("/boot", "vfat", true),
+            ("/boot/efi", "vfat", true),
+            ("/efi", "vfat", true),
+            ("/boot", "ext4", false),
+            ("/home", "vfat", false),
+        ];
+        for (mountpoint, fstype, expect_ef00) in cases {
+            let plan = manual_plan(vec![crate::PartitionSpec {
+                device: "/dev/vdb".into(),
+                mountpoint: mountpoint.into(),
+                fstype: fstype.into(),
+                size: "512M".into(),
+                format: true,
+            }]);
+            let cfg = generate_disko_config(&plan);
+            assert_eq!(
+                cfg.contains("EF00"),
+                expect_ef00,
+                "mountpoint={mountpoint} fstype={fstype}: EF00 esperado={expect_ef00}",
+            );
+        }
     }
 }
