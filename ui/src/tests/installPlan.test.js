@@ -170,8 +170,21 @@ test('validacao por etapa respeita campos UX sem poluir o payload', () => {
   const summaryValidation = validateStep('summary', draft, uiState);
 
   assert.ok(networkValidation.warnings.includes('A porta WAN ainda não foi confirmada fisicamente.'));
-  assert.ok(networkValidation.warnings.includes('A porta LAN/PXE ainda não foi confirmada fisicamente.'));
+  assert.ok(networkValidation.blockingIssues.includes('A porta LAN/PXE deve ser confirmada fisicamente.'));
   assert.ok(summaryValidation.blockingIssues.includes('Confirme o aviso destrutivo para continuar.'));
+});
+
+test('validacao de rede com apenas 1 interface nao exige confirmacao fisica da LAN', () => {
+  const draft = createValidDraft();
+  const uiState = createValidUi({
+    netIfacesCount: 1,
+    lanIdentified: false,
+  });
+
+  const validation = validateStep('network', draft, uiState);
+
+  assert.equal(validation.warnings.includes('A porta LAN/PXE ainda não foi confirmada fisicamente.'), false);
+  assert.equal(validation.blockingIssues.includes('A porta LAN/PXE deve ser confirmada fisicamente.'), false);
 });
 
 test('single, split e RAID geram payload coerente com o contrato', () => {
