@@ -638,7 +638,7 @@ export function getStorageRecommendation(disks) {
 
 /* ── /srv/data decision helpers ── */
 
-const SRV_DATA_PROFILES = ['server', 'server-dev', 'ai-local', 'server-ai', 'full'];
+import { getProfileById } from '../data/profileCatalog.js';
 
 const SRV_DATA_FEATURE_TRIGGERS = [
   'storage.srv-data',
@@ -651,7 +651,8 @@ const SRV_DATA_FEATURE_TRIGGERS = [
 
 export function shouldRecommendSrvData(profileId, selectedFeatures) {
   if (!profileId) return false;
-  if (SRV_DATA_PROFILES.includes(profileId)) return true;
+  const profile = getProfileById(profileId);
+  if (profile?.enableSrvData === true) return true;
   const selected = new Set(Array.isArray(selectedFeatures) ? selectedFeatures : []);
   return SRV_DATA_FEATURE_TRIGGERS.some((id) => selected.has(id));
 }
