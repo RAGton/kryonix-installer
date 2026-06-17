@@ -31,21 +31,11 @@ function resolveApiErrorMessage(body, fallbackMessage) {
 }
 
 async function requestJson(path, options = {}) {
-  const headers = new Headers(options.headers || {});
-  const token = sessionStorage.getItem('kryonixSessionToken');
-  if (token) {
-    headers.set('Authorization', `Bearer ${token}`);
-  }
-
   const response = await fetch(path, {
     cache: 'no-store',
     ...options,
-    headers,
+    headers: options.headers,
   });
-
-  if (response.status === 401) {
-    window.dispatchEvent(new Event('kryonix-unauthorized'));
-  }
 
   const body = await parseResponseBody(response);
 

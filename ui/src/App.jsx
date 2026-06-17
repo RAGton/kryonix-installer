@@ -1,7 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import Layout from './components/Layout.jsx';
 import FooterFixed from './components/FooterFixed.jsx';
-import Login from './pages/Login.jsx';
 import Welcome from './pages/Welcome.jsx';
 import Eula from './pages/Eula.jsx';
 import Network from './pages/Network.jsx';
@@ -130,7 +129,6 @@ function getInitialWizardState() {
 export default function App() {
   const initialState = useMemo(() => getInitialWizardState(), []);
   const [stepIndex, setStepIndex] = useState(initialState.stepIndex);
-  const [requiresLogin, setRequiresLogin] = useState(false);
   const [wizardState, setWizardState] = useState({
     draft: initialState.draft,
     uiState: initialState.uiState,
@@ -158,26 +156,6 @@ export default function App() {
   useEffect(() => {
     writeStoredWizardState({ stepIndex, draft, uiState });
   }, [draft, stepIndex, uiState]);
-
-  useEffect(() => {
-    const handleUnauthorized = () => {
-      setRequiresLogin(true);
-    };
-
-    // Test initial connection
-    fetch('/version', {
-      headers: {
-        'Authorization': `Bearer ${sessionStorage.getItem('kryonixSessionToken') || ''}`
-      }
-    }).then(res => {
-      if (res.status === 401) {
-        setRequiresLogin(true);
-      }
-    }).catch(() => {});
-
-    window.addEventListener('kryonix-unauthorized', handleUnauthorized);
-    return () => window.removeEventListener('kryonix-unauthorized', handleUnauthorized);
-  }, []);
 
   const updateWizard = useCallback((patchOrUpdater) => {
     setWizardState((previous) => {
@@ -445,10 +423,6 @@ export default function App() {
         return null;
     }
   })();
-
-  if (requiresLogin) {
-    return <Login onLoginSuccess={() => setRequiresLogin(false)} />;
-  }
 
   return (
     <Layout

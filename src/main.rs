@@ -4,7 +4,6 @@ mod disk;
 mod executor;
 mod network;
 use network::apply_network;
-mod middleware;
 mod mode;
 mod profiles;
 
@@ -37,8 +36,6 @@ pub struct AppState {
     pub auth: auth::SharedAuthState,
     /// Reusable HTTP client (connection pooling, rustls)
     pub http_client: reqwest::Client,
-    pub mode: mode::InstallerMode,
-    pub session_token: Option<String>,
 }
 
 // ── Common error type ─────────────────────────────────────────────────────────
@@ -247,25 +244,6 @@ async fn main() {
         .expect("Failed to build HTTP client");
 
     let installer_mode = mode::InstallerMode::detect();
-    let session_token = if installer_mode == mode::InstallerMode::Remote {
-        let token = uuid::Uuid::new_v4().to_string();
-        std::fs::create_dir_all("/run/kryonix-installer").unwrap_or_default();
-        std::fs::write("/run/kryonix-installer/session-token", &token).unwrap_or_default();
-        #[cfg(unix)]
-        {
-            use std::os::unix::fs::PermissionsExt;
-            if let Ok(mut perms) =
-                std::fs::metadata("/run/kryonix-installer/session-token").map(|m| m.permissions())
-            {
-                perms.set_mode(0o600);
-                std::fs::set_permissions("/run/kryonix-installer/session-token", perms)
-                    .unwrap_or_default();
-            }
-        }
-        Some(token)
-    } else {
-        None
-    };
 
     let state = Arc::new(AppState {
         log_sender: Arc::new(log_tx),
@@ -273,8 +251,6 @@ async fn main() {
         install_status: Arc::new(RwLock::new(InstallStatus::default())),
         auth: auth::new_auth_state(),
         http_client,
-        mode: installer_mode.clone(),
-        session_token,
     });
 
     let ui_dir = std::env::var("KRYONIX_INSTALLER_UI_DIR")
@@ -321,11 +297,7 @@ async fn main() {
         .route("/api/partition", post(partition_endpoint))
         .route("/api/reboot", post(reboot_endpoint))
         .route("/api/stream", get(stream_logs))
-        .route("/auth/verify", get(|| async { axum::http::StatusCode::OK }))
-        .layer(axum::middleware::from_fn_with_state(
-            state.clone(),
-            middleware::require_token,
-        ));
+        .route("/auth/verify", get(|| async { axum::http::StatusCode::OK }));
 
     let app = Router::new()
         .route("/health", get(health))
@@ -334,7 +306,7 @@ async fn main() {
         .with_state(state.clone())
         .fallback_service(ServeDir::new(ui_dir).fallback(ServeDir::new("ui/static")));
 
-    let bind_addr = if state.mode == mode::InstallerMode::Remote {
+    let bind_addr = if installer_mode == mode::InstallerMode::Remote {
         std::env::var("KRYONIX_INSTALLER_BIND").unwrap_or_else(|_| "0.0.0.0:8080".to_string())
     } else {
         std::env::var("KRYONIX_INSTALLER_BIND").unwrap_or_else(|_| "127.0.0.1:8080".to_string())
