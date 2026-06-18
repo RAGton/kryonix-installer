@@ -101,7 +101,11 @@ pub struct InstallPlan {
     pub target_remote_access: TargetRemoteAccessPlan,
 }
 
+// UI sends camelCase keys (serverIp, prefixLength, httpPort, pppoeUser).
+// `rename_all = "camelCase"` makes serde accept the UI wire format directly
+// while Rust code continues to use idiomatic snake_case field names.
 #[derive(Serialize, Deserialize, Clone, Default)]
+#[serde(rename_all = "camelCase")]
 pub struct NetworkPlan {
     pub hostname: String,
     pub interface: String,
@@ -116,6 +120,7 @@ pub struct NetworkPlan {
 }
 
 #[derive(Serialize, Deserialize, Clone, Default)]
+#[serde(rename_all = "camelCase")]
 pub struct WanPlan {
     pub interface: String,
     pub mode: String,
@@ -976,9 +981,14 @@ mod tests {
 
     /// Garante que InstallPlan desserializa um payload real da UI
     /// com features não-vazias, authorized_keys e target_remote_access.
+    ///
+    /// O payload usa as chaves camelCase que buildKryonixInstallPlan (installerApi.js)
+    /// envia: serverIp, prefixLength, httpPort, pppoeUser.
     #[test]
     fn test_install_plan_deserializes_real_ui_payload() {
-        // Fixture gerada pelo mapper da UI (buildKryonixInstallPlan)
+        // Fixture idêntica ao que buildKryonixInstallPlan produz:
+        // chaves camelCase no bloco network, snake_case nos demais campos do
+        // InstallPlan que o mapper mantém por compatibilidade.
         // NOTA: Nenhuma senha aqui — senhas trafegam via canal separado.
         let json = serde_json::json!({
             "version": 1,
@@ -1006,21 +1016,22 @@ mod tests {
                 "remote": { "remote.openssh": true }
             },
             "target_remote_access": { "enabled": true },
+            // camelCase: exatamente como a UI envia via buildKryonixInstallPlan
             "network": {
                 "hostname": "kryonix-srv",
                 "interface": "enp1s0",
-                "server_ip": "10.0.0.10",
-                "prefix_length": 24,
+                "serverIp": "10.0.0.10",
+                "prefixLength": 24,
                 "mode": "dhcp",
                 "gateway": "10.0.0.1",
                 "dns": ["1.1.1.1"],
-                "http_port": 8080,
+                "httpPort": 8080,
                 "wan": { "interface": "", "mode": "dhcp", "dns": [] }
             }
         });
 
         let plan: InstallPlan = serde_json::from_value(json)
-            .expect("InstallPlan deve desserializar payload real da UI");
+            .expect("InstallPlan deve desserializar payload real da UI (camelCase)");
 
         assert_eq!(plan.user.name, "rag");
         assert_eq!(plan.user.uid, 1000);
@@ -1028,10 +1039,68 @@ mod tests {
         assert_eq!(plan.user.authorized_keys.len(), 1);
         assert!(plan.user.authorized_keys[0].starts_with("ssh-ed25519"));
         assert!(plan.target_remote_access.enabled);
+        assert_eq!(plan.network.server_ip, "10.0.0.10");
+        assert_eq!(plan.network.prefix_length, 24);
+        assert_eq!(plan.network.http_port, 8080);
         assert_eq!(
             plan.features.get("system").and_then(|s| s.get("ai.ollama")),
             Some(&serde_json::Value::Bool(true))
         );
+    }
+
+    /// Regressão — bug: "missing field server_ip" ao receber payload camelCase da UI.
+    ///
+    /// Antes do fix, `network: missing field server_ip` era retornado pelo
+    /// axum porque NetworkPlan usava snake_case sem `rename_all = "camelCase"`.
+    /// Este teste garante que o payload mínimo com network.serverIp (sem nenhum
+    /// campo opcional) não mais causa 422.
+    #[test]
+    fn test_network_plan_accepts_camelcase_from_ui() {
+        // Payload mínimo: apenas os campos obrigatórios que a UI sempre envia.
+        // Representa o cenário de falha original: modo DHCP sem IP manual.
+        let json = serde_json::json!({
+            "version": 1,
+            "hostname": "kryonix",
+            "timezone": "America/Cuiaba",
+            "locale": "pt_BR.UTF-8",
+            "keyboard": "br-abnt2",
+            "disk": {
+                "mode": "dry-run",
+                "target": "/dev/sda",
+                "layout": "btrfs-simple",
+                "boot_mode": "uefi",
+                "profile": "single",
+                "selectedDisks": ["/dev/sda"]
+            },
+            "user": { "name": "admin", "admin": true },
+            "features": {},
+            // Payload exato que buildKryonixInstallPlan gera no modo DHCP:
+            // serverIp é o campo que causava "missing field server_ip"
+            "network": {
+                "hostname": "kryonix",
+                "interface": "enp1s0",
+                "serverIp": "0.0.0.0",
+                "prefixLength": 0,
+                "mode": "dhcp",
+                "gateway": "0.0.0.0",
+                "dns": [],
+                "httpPort": 8080,
+                "wan": { "interface": "", "mode": "dhcp", "dns": [] }
+            }
+        });
+
+        // Antes do fix: panic com "missing field `server_ip`"
+        // Após o fix: desserializa sem erro
+        let result = serde_json::from_value::<InstallPlan>(json);
+        assert!(
+            result.is_ok(),
+            "NetworkPlan deve aceitar chaves camelCase da UI. Erro: {:?}",
+            result.err()
+        );
+        let plan = result.unwrap();
+        assert_eq!(plan.network.server_ip, "0.0.0.0");
+        assert_eq!(plan.network.prefix_length, 0);
+        assert_eq!(plan.network.http_port, 8080);
     }
 
     /// Garante que InstallPlan aceita authorized_keys vazio (campo opcional).
