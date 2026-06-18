@@ -260,7 +260,15 @@ export default function App() {
       }
     } catch (err) {
       console.error('[Network] applyNetwork failed:', err);
-      // Erro de comunicação/exceção: mensagem visível na UI, sem avanço.
+      // No Remote Web, o 'nmcli con up' derruba a conexão e gera um TypeError de rede.
+      if (err instanceof TypeError && err.message.toLowerCase().includes('fetch')) {
+        console.warn('[Network] Conexão HTTP caiu. Provavelmente o backend reiniciou a rede com sucesso.');
+        updateWizard({ netApplyBusy: false });
+        goNext();
+        return;
+      }
+      
+      // Erro de comunicação/exceção real: mensagem visível na UI, sem avanço.
       updateWizard({
         netApplyError: getInstallerApiErrorMessage(err, 'Falha ao aplicar a configuração de rede (/network/apply).'),
         netApplyBusy: false,

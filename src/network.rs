@@ -624,6 +624,34 @@ async fn apply_dhcp(
     interface: &str,
     dns: &str,
 ) -> Result<(String, String, Vec<String>), String> {
+    // PROTEÇÃO REMOTE WEB:
+    // Evita reiniciar a interface se ela já estiver configurada para DHCP e conectada,
+    // o que previne a quebra da conexão HTTP do instalador remoto.
+    let current_method = Command::new("nmcli")
+        .args(["-t", "-f", "ipv4.method", "connection", "show", connection])
+        .output()
+        .await
+        .map(|o| String::from_utf8_lossy(&o.stdout).trim().to_string())
+        .unwrap_or_default();
+
+    let current_state = Command::new("nmcli")
+        .args(["-t", "-f", "GENERAL.STATE", "device", "show", interface])
+        .output()
+        .await
+        .map(|o| String::from_utf8_lossy(&o.stdout).trim().to_string())
+        .unwrap_or_default();
+
+    if current_method == "auto" && current_state == "100 (connected)" {
+        if let Some(ip) = get_ip_for_interface(interface).await {
+            if is_valid_dhcp_ip(&ip) {
+                let gateway = get_gateway_for_interface(interface).await.unwrap_or_default();
+                let dns_servers = get_dns_for_interface(interface).await;
+                // Retorna imediatamente sem rodar 'nmcli con up'
+                return Ok((ip, gateway, dns_servers));
+            }
+        }
+    }
+
     // Set connection to DHCP
     let mut args = vec![
         "con",
