@@ -24,8 +24,16 @@ function resolveApiErrorMessage(body, fallbackMessage) {
   if (typeof body === 'string' && body.trim()) {
     return body;
   }
-  if (body && typeof body === 'object' && typeof body.error === 'string' && body.error.trim()) {
-    return body.error;
+  if (body && typeof body === 'object') {
+    if (typeof body.error === 'string' && body.error.trim()) {
+      return body.error;
+    }
+    if (Array.isArray(body.checks)) {
+      const failed = body.checks.filter(c => !c.ok && !c.passed);
+      if (failed.length > 0) {
+        return failed.map(c => c.message || c.error || 'Erro desconhecido').join('\n');
+      }
+    }
   }
   return fallbackMessage;
 }
@@ -55,7 +63,7 @@ async function requestJson(path, options = {}) {
 // SECURITY: A senha do administrador NUNCA entra neste payload.
 // Ela trafega exclusivamente via buildInstallSecretsPayload (canal separado).
 // Este payload contém apenas campos não-secretos.
-function buildKryonixInstallPlan(planPayload, mode = 'install') {
+function buildKryonixInstallPlan(planPayload, secretsPayload = {}, mode = 'install') {
   const layout = (planPayload.disk?.rootFs === 'btrfs') ? 'btrfs-simple' : 'lvm-simple';
 
   return {
@@ -77,24 +85,19 @@ function buildKryonixInstallPlan(planPayload, mode = 'install') {
     user: {
       name: planPayload.admin?.user || 'admin',
       admin: true,
-      // uid e email são campos informativos; não são segredos
       uid: planPayload.admin?.uid ?? 1000,
       email: planPayload.admin?.email || '',
-      // authorized_keys: chaves SSH públicas — não são segredos
       authorized_keys: Array.isArray(planPayload.admin?.authorizedKeys)
         ? planPayload.admin.authorizedKeys
         : [],
+      hashedPassword: secretsPayload.adminPassword || '',
     },
-    // features: preserva o que o usuário selecionou na UI.
-    // Nunca hardcodar {}: isso silenciosamente descartaria todas as features.
     features: planPayload.features && typeof planPayload.features === 'object'
       ? planPayload.features
       : {},
-    // target_remote_access: controla explicitamente se o openssh será habilitado no sistema instalado
     target_remote_access: {
       enabled: Boolean(planPayload.targetRemoteAccess?.enabled),
     },
-    // network: repassa o bloco completo para o backend
     network: planPayload.network || {},
   };
 }
@@ -189,8 +192,8 @@ export const installerApi = {
 
   // Validate the plan via backend dry-run before committing to install.
   // Throws InstallerApiError if any check fails so the hook surfaces the error.
-  async savePlan(planPayload, _secrets) {
-    const kryonixPlan = buildKryonixInstallPlan(planPayload, 'dry-run');
+  async savePlan(planPayload, secretsPayload) {
+    const kryonixPlan = buildKryonixInstallPlan(planPayload, secretsPayload, 'dry-run');
     window.__kryonix_install_plan = kryonixPlan;
 
     const result = await requestJson('/dry-run', {

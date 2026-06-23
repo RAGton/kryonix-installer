@@ -8,7 +8,7 @@ export const PROFILE_CATALOG = [
     badges: ['Rápido', 'CLI'],
     enableSrvData: false,
     srvDataRecommended: false,
-    defaultFeatures: ['network.openssh', 'security.firewall']
+    defaultFeatures: ['remote.openssh', 'security.firewall']
   },
   {
     id: 'desktop',
@@ -19,7 +19,7 @@ export const PROFILE_CATALOG = [
     badges: ['Wayland', 'GUI'],
     enableSrvData: false,
     srvDataRecommended: false,
-    defaultFeatures: ['desktop.plasma', 'desktop.audio', 'desktop.bluetooth', 'security.firewall', 'network.openssh', 'shell.zsh', 'shell.starship', 'terminal.warp', 'browser.firefox']
+    defaultFeatures: ['desktop.plasma', 'desktop.audio', 'desktop.bluetooth', 'security.firewall', 'remote.openssh', 'shell.zsh', 'shell.starship', 'terminal.warp', 'browser.firefox']
   },
   {
     id: 'development',
@@ -30,7 +30,7 @@ export const PROFILE_CATALOG = [
     badges: ['Dev', 'Produtividade'],
     enableSrvData: false,
     srvDataRecommended: false,
-    defaultFeatures: ['desktop.plasma', 'desktop.audio', 'desktop.bluetooth', 'security.firewall', 'network.openssh', 'shell.zsh', 'shell.starship', 'terminal.warp', 'editor.vscode-insiders', 'dev.rust', 'dev.python', 'dev.nix', 'dev.jupyter', 'virtualization.podman']
+    defaultFeatures: ['desktop.plasma', 'desktop.audio', 'desktop.bluetooth', 'security.firewall', 'remote.openssh', 'shell.zsh', 'shell.starship', 'terminal.warp', 'editor.vscode-insiders', 'dev.rust', 'dev.python', 'dev.nix', 'dev.jupyter', 'virtualization.podman']
   },
   {
     id: 'gamer',
@@ -41,7 +41,7 @@ export const PROFILE_CATALOG = [
     badges: ['Gaming', 'Steam'],
     enableSrvData: false,
     srvDataRecommended: false,
-    defaultFeatures: ['desktop.plasma', 'desktop.audio', 'desktop.bluetooth', 'security.firewall', 'network.openssh', 'shell.zsh', 'terminal.warp', 'gamer.steam', 'gamer.gamemode', 'gamer.mangohud', 'gamer.proton', 'gamer.controllers']
+    defaultFeatures: ['desktop.plasma', 'desktop.audio', 'desktop.bluetooth', 'security.firewall', 'remote.openssh', 'shell.zsh', 'terminal.warp', 'gamer.steam', 'gamer.gamemode', 'gamer.mangohud', 'gamer.proton', 'gamer.controllers']
   },
   {
     id: 'gamer-dev',
@@ -52,7 +52,7 @@ export const PROFILE_CATALOG = [
     badges: ['Gaming', 'Dev'],
     enableSrvData: false,
     srvDataRecommended: false,
-    defaultFeatures: ['desktop.plasma', 'desktop.audio', 'desktop.bluetooth', 'security.firewall', 'network.openssh', 'shell.zsh', 'terminal.warp', 'editor.vscode-insiders', 'dev.rust', 'dev.python', 'dev.nix', 'gamer.steam', 'gamer.gamemode', 'gamer.mangohud', 'gamer.proton', 'gamer.controllers', 'virtualization.podman']
+    defaultFeatures: ['desktop.plasma', 'desktop.audio', 'desktop.bluetooth', 'security.firewall', 'remote.openssh', 'shell.zsh', 'terminal.warp', 'editor.vscode-insiders', 'dev.rust', 'dev.python', 'dev.nix', 'gamer.steam', 'gamer.gamemode', 'gamer.mangohud', 'gamer.proton', 'gamer.controllers', 'virtualization.podman']
   },
   {
     id: 'server',
@@ -63,7 +63,7 @@ export const PROFILE_CATALOG = [
     badges: ['Headless', 'Rede'],
     enableSrvData: false,
     srvDataRecommended: true,
-    defaultFeatures: ['security.firewall', 'network.openssh', 'security.fail2ban', 'virtualization.podman', 'server.containers', 'observability.prometheus', 'storage.srv-data']
+    defaultFeatures: ['security.firewall', 'remote.openssh', 'security.fail2ban', 'virtualization.podman', 'server.containers', 'observability.prometheus', 'storage.srv-data']
   },
   {
     id: 'server-dev',
@@ -74,7 +74,7 @@ export const PROFILE_CATALOG = [
     badges: ['Headless', 'DevOps'],
     enableSrvData: false,
     srvDataRecommended: true,
-    defaultFeatures: ['security.firewall', 'network.openssh', 'security.fail2ban', 'virtualization.podman', 'server.containers', 'observability.prometheus', 'storage.srv-data', 'dev.git', 'dev.github-cli', 'dev.nix', 'shell.zsh']
+    defaultFeatures: ['security.firewall', 'remote.openssh', 'security.fail2ban', 'virtualization.podman', 'server.containers', 'observability.prometheus', 'storage.srv-data', 'dev.git', 'dev.github-cli', 'dev.nix', 'shell.zsh']
   },
   {
     id: 'ai-local',
@@ -85,7 +85,7 @@ export const PROFILE_CATALOG = [
     badges: ['Exige GPU', 'IA Local'],
     enableSrvData: true,
     srvDataRecommended: true,
-    defaultFeatures: ['security.firewall', 'network.openssh', 'ai.ollama', 'ai.open-webui', 'ai.neo4j', 'ai.lightrag', 'ai.kryonix-brain', 'storage.srv-data', 'virtualization.podman']
+    defaultFeatures: ['security.firewall', 'remote.openssh', 'ai.ollama', 'ai.open-webui', 'ai.neo4j', 'ai.lightrag', 'ai.kryonix-brain', 'storage.srv-data', 'virtualization.podman']
   },
   {
     id: 'server-ai',
@@ -96,7 +96,7 @@ export const PROFILE_CATALOG = [
     badges: ['Headless', 'IA', 'Servidor'],
     enableSrvData: true,
     srvDataRecommended: true,
-    defaultFeatures: ['security.firewall', 'network.openssh', 'security.fail2ban', 'ai.ollama', 'ai.open-webui', 'ai.neo4j', 'ai.lightrag', 'ai.kryonix-brain', 'storage.srv-data', 'virtualization.podman', 'server.containers', 'observability.prometheus', 'observability.grafana']
+    defaultFeatures: ['security.firewall', 'remote.openssh', 'security.fail2ban', 'ai.ollama', 'ai.open-webui', 'ai.neo4j', 'ai.lightrag', 'ai.kryonix-brain', 'storage.srv-data', 'virtualization.podman', 'server.containers', 'observability.prometheus', 'observability.grafana']
   },
   {
     id: 'full',
@@ -107,7 +107,7 @@ export const PROFILE_CATALOG = [
     badges: ['Massivo', 'Completo'],
     enableSrvData: true,
     srvDataRecommended: true,
-    defaultFeatures: ['desktop.plasma', 'desktop.audio', 'desktop.bluetooth', 'desktop.printing', 'security.firewall', 'network.openssh', 'shell.zsh', 'shell.starship', 'terminal.warp', 'editor.vscode-insiders', 'dev.rust', 'dev.python', 'dev.nix', 'dev.jupyter', 'gamer.steam', 'gamer.gamemode', 'gamer.mangohud', 'gamer.proton', 'gamer.controllers', 'ai.ollama', 'ai.open-webui', 'ai.neo4j', 'ai.lightrag', 'ai.kryonix-brain', 'virtualization.podman', 'virtualization.libvirt', 'storage.srv-data', 'observability.prometheus', 'observability.grafana', 'mcp.filesystem', 'mcp.neo4j', 'mcp.ollama', 'server.containers', 'server.database', 'server.reverse-proxy', 'server.backups']
+    defaultFeatures: ['desktop.plasma', 'desktop.audio', 'desktop.bluetooth', 'desktop.printing', 'security.firewall', 'remote.openssh', 'shell.zsh', 'shell.starship', 'terminal.warp', 'editor.vscode-insiders', 'dev.rust', 'dev.python', 'dev.nix', 'dev.jupyter', 'gamer.steam', 'gamer.gamemode', 'gamer.mangohud', 'gamer.proton', 'gamer.controllers', 'ai.ollama', 'ai.open-webui', 'ai.neo4j', 'ai.lightrag', 'ai.kryonix-brain', 'virtualization.podman', 'virtualization.libvirt', 'storage.srv-data', 'observability.prometheus', 'observability.grafana', 'mcp.filesystem', 'mcp.neo4j', 'mcp.ollama', 'server.containers', 'server.database', 'server.reverse-proxy', 'server.backups']
   },
   {
     id: 'custom',

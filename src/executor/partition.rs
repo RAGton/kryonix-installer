@@ -285,6 +285,7 @@ mod tests {
                 name: "admin".into(),
                 admin: true,
                 uid: 1000,
+                hashed_password: None,
                 email: "".into(),
                 authorized_keys: vec![],
             },

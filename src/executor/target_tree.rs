@@ -218,6 +218,71 @@ async fn pre_lock_target() -> Result<(), String> {
     Ok(())
 }
 
+/// P0.2 — Avalia o target flake com `nix eval` ANTES de qualquer ação destrutiva.
+///
+/// Roda `nix eval .#nixosConfigurations.HOSTNAME.config.system.build.toplevel`
+/// com `--no-build` e `--no-write-lock-file` para validar que o flake avalia
+/// sem erros de sintaxe Nix (timezone inválida, feature duplicada, etc.).
+///
+/// Esta função é **pré-destrutiva**: não toca disco, não formata nada.
+/// Se falhar, a instalação aborta com mensagem de erro clara ANTES do disko.
+pub async fn eval_target_flake(
+    plan: &crate::InstallPlan,
+    tx: Arc<broadcast::Sender<ProgressEvent>>,
+) -> Result<(), String> {
+    let hostname = plan.hostname.trim();
+    // Fallback para hostname padrão caso esteja vazio (validate_plan já rejeitou,
+    // mas preferimos não panics aqui).
+    let hostname = if hostname.is_empty() {
+        "kryonix"
+    } else {
+        hostname
+    };
+
+    let flake_attr =
+        format!("{TARGET_ROOT}#nixosConfigurations.\"{hostname}\".config.system.build.toplevel");
+
+    let _ = tx.send(ProgressEvent {
+        step: "preflight".into(),
+        message: format!("nix eval {flake_attr} ..."),
+        percent: 43,
+    });
+
+    let out = Command::new("nix")
+        .args([
+            "--extra-experimental-features",
+            "nix-command flakes",
+            "eval",
+            &flake_attr,
+            "--no-write-lock-file",
+        ])
+        .output()
+        .await
+        .map_err(|e| format!("nix eval falhou ao iniciar: {e}"))?;
+
+    if !out.status.success() {
+        let stderr = String::from_utf8_lossy(&out.stderr);
+        let stdout = String::from_utf8_lossy(&out.stdout);
+        // Mensagem de erro estruturada para aparecer claramente na UI/log.
+        return Err(format!(
+            "nix eval FALHOU antes do particionamento — disco não foi tocado.\n\
+             Atributo avaliado: {flake_attr}\n\
+             Código de saída: {:?}\n\
+             stderr: {stderr}\n\
+             stdout: {stdout}",
+            out.status.code()
+        ));
+    }
+
+    let _ = tx.send(ProgressEvent {
+        step: "preflight".into(),
+        message: "nix eval OK — target flake válido. Prosseguindo para particionamento.".into(),
+        percent: 44,
+    });
+
+    Ok(())
+}
+
 async fn create_skeleton() -> Result<(), String> {
     for dir in [TARGET_ROOT, ENGINE_DIR, GENERATED_DIR, STATE_DIR] {
         tokio::fs::create_dir_all(dir)
@@ -560,6 +625,29 @@ pub fn render_users_generated(plan: &InstallPlan) -> String {
         }
     };
 
+    // P0.4: Emite hashedPassword quando presente.
+    // SEGURANÇA: o hash NÃO é logado — apenas escrito no arquivo .nix.
+    // Usa `hashedPassword` (não `initialHashedPassword`) para que qualquer
+    // alteração de senha posterior via `passwd` seja preservada pelo NixOS
+    // sem conflito.
+    let password_block = match &plan.user.hashed_password {
+        Some(h) if !h.trim().is_empty() => {
+            // Escapa o hash para string Nix (hashes $y$/$6$ não contêm " nem ${,
+            // mas aplicamos escaping preventivo por completude).
+            let escaped_hash = h
+                .trim()
+                .replace('\\', "\\\\")
+                .replace('"', "\\\"")
+                .replace("${", "\\${");
+            format!("    hashedPassword = \"{}\";\n", escaped_hash)
+        }
+        _ => {
+            // Sem senha: usar "!" bloqueia login por senha (seguro), forçando
+            // uso de SSH key. validate_plan já rejeitou este caso em mode=install.
+            "    hashedPassword = \"!\";\n".to_string()
+        }
+    };
+
     format!(
         r#"{{ config, lib, pkgs, ... }}:
 {{
@@ -568,13 +656,13 @@ pub fn render_users_generated(plan: &InstallPlan) -> String {
     description = "{user}";
     uid = {uid};
     extraGroups = {groups};
-{ssh_keys}
-  }};
+{password_block}{ssh_keys}  }};
 }}
 "#,
         user = user,
         uid = uid,
         groups = groups,
+        password_block = password_block,
         ssh_keys = ssh_keys_block,
     )
 }
@@ -592,16 +680,12 @@ async fn write_features_generated(plan: &InstallPlan) -> Result<(), String> {
     let timezone = plan.timezone.trim();
     let locale = plan.locale.trim();
     let keyboard = plan.keyboard.trim();
-    let features = render_features(plan);
+    let features = render_features(plan)?;
 
     // O SSH do sistema instalado é habilitado se target_remote_access for true
-    // OU se a feature 'network.openssh' foi selecionada no wizard.
-    let has_openssh_feature = plan
-        .features
-        .get("network")
-        .and_then(|n| n.get("network.openssh"))
-        .and_then(|v| v.as_bool())
-        .unwrap_or(false);
+    // OU se a feature 'remote.openssh' foi selecionada no wizard.
+    let has_openssh_feature = plan.features.get("remote").and_then(|n| n.get("remote.openssh")).and_then(|v| v.as_bool()).unwrap_or(false)
+        || plan.features.get("network").and_then(|n| n.get("network.openssh")).and_then(|v| v.as_bool()).unwrap_or(false);
     let openssh_block = if plan.target_remote_access.enabled || has_openssh_feature {
         "  services.openssh.enable = true;\n"
     } else {
@@ -646,8 +730,12 @@ async fn write_features_generated(plan: &InstallPlan) -> Result<(), String> {
     Ok(())
 }
 
-fn render_features(plan: &InstallPlan) -> String {
-    let mut lines: Vec<String> = vec!["  kryonix.features = {".into()];
+struct FeatureRender {
+    value: bool,
+    source_features: Vec<String>,
+}
+
+fn render_features(plan: &InstallPlan) -> Result<String, String> {
     let domains = [
         "system",
         "ai",
@@ -657,22 +745,58 @@ fn render_features(plan: &InstallPlan) -> String {
         "observability",
         "mcp",
     ];
+
+    let mut options_map: std::collections::BTreeMap<String, FeatureRender> =
+        std::collections::BTreeMap::new();
+
     for d in domains {
         if let Some(val) = plan.features.get(d)
             && let Some(obj) = val.as_object()
         {
             for (k, v) in obj {
-                if v.as_bool() == Some(true) {
+                if let Some(b) = v.as_bool() {
+                    if k == "remote.openssh" || k == "network.openssh" {
+                        continue;
+                    }
                     let parts: Vec<&str> = k.split('.').collect();
                     if parts.len() == 2 {
-                        lines.push(format!("    {}.{}.enable = true;", parts[0], parts[1]));
+                        let option_path = format!("{}.{}.enable", parts[0], parts[1]);
+                        let source_feature = k.to_string();
+
+                        if let Some(existing) = options_map.get_mut(&option_path) {
+                            if existing.value != b {
+                                return Err(format!(
+                                    "Feature conflict: option {} requested with both true and false sources: {}, {}",
+                                    option_path,
+                                    existing.source_features.join(", "),
+                                    source_feature
+                                ));
+                            } else {
+                                if !existing.source_features.contains(&source_feature) {
+                                    existing.source_features.push(source_feature);
+                                }
+                            }
+                        } else {
+                            options_map.insert(
+                                option_path,
+                                FeatureRender {
+                                    value: b,
+                                    source_features: vec![source_feature],
+                                },
+                            );
+                        }
                     }
                 }
             }
         }
     }
+
+    let mut lines: Vec<String> = vec!["  kryonix.features = {".into()];
+    for (opt_path, render) in options_map {
+        lines.push(format!("    {} = {};", opt_path, render.value));
+    }
     lines.push("  };".into());
-    lines.join("\n")
+    Ok(lines.join("\n"))
 }
 
 async fn write_state_files(plan: &InstallPlan) -> Result<(), String> {
@@ -1076,6 +1200,7 @@ mod tests {
                 name: "tester".into(),
                 admin: false,
                 uid: 1000,
+                hashed_password: None,
                 email: "".into(),
                 authorized_keys: vec![
                     "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAI test-key".into(), // valid
@@ -1098,5 +1223,102 @@ mod tests {
         assert!(!content.contains("BBB")); // newlines blocked
         // Check escaping of ${
         assert!(content.contains("\\${builtins.readFile \\\"/etc/shadow\\\"}"));
+    }
+
+    #[test]
+    fn test_render_features_dedupe() {
+        use crate::{InstallPlan, PlanDisk, PlanUser, TargetRemoteAccessPlan};
+        let plan = InstallPlan {
+            version: 1,
+            hostname: "test".into(),
+            timezone: "UTC".into(),
+            locale: "en_US.UTF-8".into(),
+            keyboard: "us".into(),
+            disk: PlanDisk {
+                mode: "dry-run".into(),
+                target: "/dev/sda".into(),
+                layout: "btrfs-simple".into(),
+                boot_mode: "uefi".into(),
+                profile: "single".into(),
+                selected_disks: vec!["/dev/sda".into()],
+                raid_level: None,
+                manual_partitions: None,
+            },
+            user: PlanUser {
+                name: "tester".into(),
+                admin: false,
+                uid: 1000,
+                hashed_password: None,
+                email: "".into(),
+                authorized_keys: vec![],
+            },
+            features: serde_json::json!({
+                "system": {
+                    "security.firewall": true
+                },
+                "security": {
+                    "security.firewall": true
+                },
+                "remote": {
+                    "security.firewall": true
+                }
+            }),
+            network: Default::default(),
+            target_remote_access: TargetRemoteAccessPlan { enabled: true },
+        };
+
+        let result = super::render_features(&plan).expect("Should not fail");
+        let matches: Vec<_> = result.matches("security.firewall.enable = true;").collect();
+        assert_eq!(
+            matches.len(),
+            1,
+            "Should deduplicate and only contain one instance"
+        );
+    }
+
+    #[test]
+    fn test_render_features_conflict() {
+        use crate::{InstallPlan, PlanDisk, PlanUser, TargetRemoteAccessPlan};
+        let plan = InstallPlan {
+            version: 1,
+            hostname: "test".into(),
+            timezone: "UTC".into(),
+            locale: "en_US.UTF-8".into(),
+            keyboard: "us".into(),
+            disk: PlanDisk {
+                mode: "dry-run".into(),
+                target: "/dev/sda".into(),
+                layout: "btrfs-simple".into(),
+                boot_mode: "uefi".into(),
+                profile: "single".into(),
+                selected_disks: vec!["/dev/sda".into()],
+                raid_level: None,
+                manual_partitions: None,
+            },
+            user: PlanUser {
+                name: "tester".into(),
+                admin: false,
+                uid: 1000,
+                hashed_password: None,
+                email: "".into(),
+                authorized_keys: vec![],
+            },
+            features: serde_json::json!({
+                "system": {
+                    "security.firewall": true
+                },
+                "security": {
+                    "security.firewall": false
+                }
+            }),
+            network: Default::default(),
+            target_remote_access: TargetRemoteAccessPlan { enabled: true },
+        };
+
+        let result = super::render_features(&plan);
+        assert!(result.is_err());
+        let err = result.unwrap_err();
+        assert!(err.contains("Feature conflict"));
+        assert!(err.contains("security.firewall.enable requested with both true and false"));
     }
 }

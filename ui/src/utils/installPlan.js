@@ -465,11 +465,10 @@ export function validateStep(stepId, draftInput, uiInput = {}) {
         addBlockingIssue(result, 'Conecte-se à internet ou selecione "Continuar offline" para prosseguir.');
       }
 
-      if (!payload.network.interface) addFieldError(result, 'mgmtInterface', 'Selecione a interface LAN/PXE.');
+      if (!payload.network.interface) addFieldError(result, 'mgmtInterface', 'Selecione a interface LAN.');
       if (payload.network.interface && payload.network.wan.interface && payload.network.interface === payload.network.wan.interface) {
-        addBlockingIssue(result, 'LAN/PXE e WAN devem usar placas distintas.');
+        addBlockingIssue(result, 'LAN e WAN devem usar placas distintas.');
       }
-      if (!isValidHostname(draft.hostName)) addFieldError(result, 'hostName', 'Hostname inválido para um servidor Linux.');
       // IP/máscara/gateway/DNS só são exigidos no modo manual (estático).
       // Em DHCP esses valores vêm automaticamente da rede.
       if (payload.network.mode === 'static') {
@@ -498,8 +497,11 @@ export function validateStep(stepId, draftInput, uiInput = {}) {
         addWarning(result, 'A porta WAN ainda não foi confirmada fisicamente.');
       }
       if (!uiState.lanIdentified) {
-        addWarning(result, 'A porta LAN/PXE ainda não foi confirmada fisicamente.');
+        addWarning(result, 'A porta LAN ainda não foi confirmada fisicamente.');
       }
+      return result;
+    case 'hostSelection':
+      if (!isValidHostname(draft.hostName)) addFieldError(result, 'hostName', 'Hostname inválido para um servidor Linux.');
       return result;
     case 'disks': {
       const selectedDisks = payload.disk.selectedDisks;

@@ -641,15 +641,17 @@ async fn apply_dhcp(
         .map(|o| String::from_utf8_lossy(&o.stdout).trim().to_string())
         .unwrap_or_default();
 
-    if current_method == "auto" && current_state == "100 (connected)" {
-        if let Some(ip) = get_ip_for_interface(interface).await {
-            if is_valid_dhcp_ip(&ip) {
-                let gateway = get_gateway_for_interface(interface).await.unwrap_or_default();
-                let dns_servers = get_dns_for_interface(interface).await;
-                // Retorna imediatamente sem rodar 'nmcli con up'
-                return Ok((ip, gateway, dns_servers));
-            }
-        }
+    if current_method == "auto"
+        && current_state == "100 (connected)"
+        && let Some(ip) = get_ip_for_interface(interface).await
+        && is_valid_dhcp_ip(&ip)
+    {
+        let gateway = get_gateway_for_interface(interface)
+            .await
+            .unwrap_or_default();
+        let dns_servers = get_dns_for_interface(interface).await;
+        // Retorna imediatamente sem rodar 'nmcli con up'
+        return Ok((ip, gateway, dns_servers));
     }
 
     // Set connection to DHCP
@@ -1059,7 +1061,31 @@ mod tests {
         // Front pode mandar `dns: [""]` quando o usuário deixa o campo em branco.
         // Esses entries vazios não devem disparar INVALID_DNS.
         let mut req = make_apply_req("dhcp");
-        req.dns = vec!["".into(), "  ".into()];
+        req.dns = vec!["".into(), "   ".into()];
         assert!(validate_apply_network_request(&req).is_ok());
+    }
+
+    #[test]
+    fn test_validate_apply_hard_rejects_malformed_ips() {
+        let mut req = make_static_req();
+        req.address = "999.999.999.999".into();
+        let err = validate_apply_network_request(&req).unwrap_err();
+        assert_eq!(err.0, "INVALID_IPV4");
+
+        req.address = "192.168.1.1".into();
+        req.gateway = "192.168..1".into();
+        let err = validate_apply_network_request(&req).unwrap_err();
+        assert_eq!(err.0, "INVALID_IPV4");
+
+        req.gateway = "192.168.1.1; rm -rf /".into();
+        let err = validate_apply_network_request(&req).unwrap_err();
+        assert_eq!(err.0, "INVALID_IPV4");
+    }
+
+    #[test]
+    fn test_validate_apply_hard_rejects_weird_modes() {
+        let req = make_apply_req("DHCP; rm -rf /");
+        let err = validate_apply_network_request(&req).unwrap_err();
+        assert_eq!(err.0, "INVALID_MODE");
     }
 }

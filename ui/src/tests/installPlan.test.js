@@ -170,7 +170,7 @@ test('validacao por etapa respeita campos UX sem poluir o payload', () => {
   const summaryValidation = validateStep('summary', draft, uiState);
 
   assert.ok(networkValidation.warnings.includes('A porta WAN ainda não foi confirmada fisicamente.'));
-  assert.ok(networkValidation.warnings.includes('A porta LAN/PXE ainda não foi confirmada fisicamente.'));
+  assert.ok(networkValidation.warnings.includes('A porta LAN ainda não foi confirmada fisicamente.'));
   assert.ok(summaryValidation.blockingIssues.includes('Confirme o aviso destrutivo para continuar.'));
 });
 
@@ -525,7 +525,7 @@ test('WAN expand/collapse nao afeta campos de rede no payload', () => {
 
 test('contract: buildInstallPlanPayload preserva fields de contract e exclui senhas', () => {
   const draft = createValidDraft({
-    selectedFeatures: ['ai.ollama', 'network.openssh'],
+    selectedFeatures: ['ai.ollama', 'remote.openssh'],
     adminAuthorizedKeys: 'ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAI test\nssh-rsa AAAAB3... test2\n',
     targetRemoteAccessEnabled: true,
     adminPassword: 'SuperSecretPassword123!',
@@ -538,7 +538,7 @@ test('contract: buildInstallPlanPayload preserva fields de contract e exclui sen
 
   // Features agrupadas e preservadas
   assert.ok(plan.features.system['ai.ollama'], 'Feature de IA deve estar presente');
-  assert.ok(plan.features.remote['network.openssh'], 'Feature de openssh deve estar presente');
+  assert.ok(plan.features.remote['remote.openssh'], 'Feature de openssh deve estar presente');
 
   // authorizedKeys processado e preservado
   assert.equal(plan.admin.authorizedKeys.length, 2, 'Deve ter processado 2 chaves SSH');

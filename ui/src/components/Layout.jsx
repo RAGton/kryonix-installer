@@ -1,3 +1,5 @@
+import Background3D from './Background3D';
+
 export default function Layout({
   title,
   subtitle,
@@ -9,6 +11,7 @@ export default function Layout({
 }) {
   return (
     <div className="shell">
+      <Background3D />
       <header className="hdr">
         <div className="logo">⟡ KRYONIX <span>installer</span></div>
 

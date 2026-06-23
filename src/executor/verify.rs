@@ -142,6 +142,7 @@ mod tests {
                 name: "admin".into(),
                 admin: true,
                 uid: 1000,
+                hashed_password: None,
                 email: String::new(),
                 authorized_keys: vec![],
             },

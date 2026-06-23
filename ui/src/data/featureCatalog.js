@@ -85,7 +85,7 @@ export const FEATURE_CATALOG = [
 
   // NETWORK & REMOTE (System level)
   {
-    id: 'network.openssh',
+    id: 'remote.openssh',
     level: 'system',
     domain: 'remote',
     category: 'Access',
@@ -102,7 +102,7 @@ export const FEATURE_CATALOG = [
     status: 'ready'
   },
   {
-    id: 'network.tailscale',
+    id: 'remote.tailscale',
     level: 'system',
     domain: 'remote',
     category: 'VPN',

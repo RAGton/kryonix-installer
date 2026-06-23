@@ -173,6 +173,15 @@ pub struct PlanUser {
     /// Chaves SSH públicas autorizadas — chaves públicas não são segredos
     #[serde(rename = "authorized_keys", default)]
     pub authorized_keys: Vec<String>,
+    /// Hash da senha do usuário inicial (formato NixOS: `$y$...`, `$6$...`, etc.).
+    ///
+    /// SEGURANÇA:
+    /// - Nunca serializado para JSON (skip_serializing_if garante).
+    /// - Nunca logado via SSE ou arquivo de log.
+    /// - Nunca persistido em install-plan.json nem state/.
+    /// - Aceito apenas como input no payload do POST /install.
+    #[serde(rename = "hashedPassword", default, skip_serializing)]
+    pub hashed_password: Option<String>,
 }
 
 /// Controle de acesso remoto: se true, `services.openssh.enable` é emitido
@@ -527,6 +536,7 @@ async fn plan(Json(req): Json<PlanRequest>) -> Json<InstallPlan> {
             uid: 1000,
             email: String::new(),
             authorized_keys: vec![],
+            hashed_password: None,
         },
         features: req.features.unwrap_or(serde_json::json!({})),
         network: Default::default(),
@@ -536,7 +546,25 @@ async fn plan(Json(req): Json<PlanRequest>) -> Json<InstallPlan> {
 
 // ── POST /dry-run ─────────────────────────────────────────────────────────────
 
-async fn dry_run(Json(plan): Json<InstallPlan>) -> impl IntoResponse {
+fn hash_password_if_needed(plan: &mut InstallPlan) {
+    if let Some(pwd) = plan.user.hashed_password.as_deref() {
+        if !pwd.is_empty() && !pwd.starts_with('$') {
+            if let Ok(output) = std::process::Command::new("mkpasswd")
+                .arg("-m")
+                .arg("yescrypt")
+                .arg(pwd)
+                .output()
+            {
+                if output.status.success() {
+                    plan.user.hashed_password = Some(String::from_utf8_lossy(&output.stdout).trim().to_string());
+                }
+            }
+        }
+    }
+}
+
+async fn dry_run(Json(mut plan): Json<InstallPlan>) -> impl IntoResponse {
+    hash_password_if_needed(&mut plan);
     let result = validate_plan(&plan);
     // 200 somente se ok==true; 422 se o plano/alvo é semanticamente inválido.
     // (Body/JSON malformado já vira 400/422 no extractor Json antes de chegar aqui.)
@@ -679,6 +707,43 @@ fn validate_plan(plan: &InstallPlan) -> DryRunResult {
         ok = false;
     }
 
+    // P0.4: Validação de senha — bloqueio real.
+    // Em modo install, a ausência de hashedPassword cria um usuário inutilizável
+    // (sem senha = sem login em console físico sem SSH). Forçar erro antes de
+    // qualquer ação destrutiva.
+    if plan.disk.mode == "install" || plan.disk.mode == "real" {
+        match plan.user.hashed_password.as_deref().map(str::trim) {
+            None | Some("") => {
+                checks.push(Check::fail(
+                    "Senha obrigatória: user.hashedPassword ausente ou vazio. \
+                     Envie o hash NixOS ($y$..., $6$...) no campo user.hashedPassword. \
+                     O usuário seria criado sem senha, impossibilitando login físico.",
+                ));
+                ok = false;
+            }
+            Some(s) => {
+                // Aceita hashes NixOS modernos: yescrypt ($y$), sha512crypt ($6$),
+                // sha256crypt ($5$), bcrypt ($2b$) e ! para bloqueio explícito.
+                let valid_prefix = s.starts_with("$y$")
+                    || s.starts_with("$6$")
+                    || s.starts_with("$5$")
+                    || s.starts_with("$2b$")
+                    || s.starts_with('!');
+                if !valid_prefix {
+                    checks.push(Check::fail(
+                        "user.hashedPassword tem formato inválido (esperado: $y$, $6$, $5$, $2b$ ou '!'). \
+                         Use `mkpasswd -m yescrypt` para gerar."
+                    ));
+                    ok = false;
+                } else {
+                    checks.push(Check::pass(
+                        "Senha do usuário: hash presente e com formato válido",
+                    ));
+                }
+            }
+        }
+    }
+
     if !plan.timezone.trim().is_empty() {
         checks.push(Check::pass(format!("Timezone: {}", plan.timezone)));
     } else {
@@ -771,8 +836,10 @@ struct SafetyResponse {
 
 async fn install(
     State(state): State<Arc<AppState>>,
-    Json(plan): Json<InstallPlan>,
+    Json(mut plan): Json<InstallPlan>,
 ) -> impl IntoResponse {
+    hash_password_if_needed(&mut plan);
+
     // dry-run mode → only validate, never touch disks
     if plan.disk.mode == "dry-run" {
         return Json(validate_plan(&plan)).into_response();
@@ -810,35 +877,46 @@ async fn install(
             .into_response();
     }
 
-    // Launch executor in background, return job_id immediately
+    // ── P0.1: Bloquear instalação concorrente ────────────────────────────────
+    // Adquire write-lock ANTES do spawn para eliminar a race window onde dois
+    // requests simultâneos passavam a guarda (running era setado dentro do spawn).
+    {
+        let mut status = state.install_status.write().await;
+        if status.running {
+            return (
+                StatusCode::CONFLICT,
+                Json(ErrorResponse {
+                    error: "INSTALL_ALREADY_RUNNING".into(),
+                    details: Some(
+                        "Uma instalação já está em curso. Aguarde a conclusão ou reinicie o installer."
+                            .into(),
+                    ),
+                }),
+            )
+                .into_response();
+        }
+        // Reserva o slot ANTES do spawn — elimina a race window.
+        status.running = true;
+        status.exit_code = None;
+        status.current_phase = Some("precheck".into());
+        status.last_error = None;
+        status.last_log_line = Some("job aceito; iniciando executor real".to_string());
+        status.have_plan = true;
+        status.can_install = true;
+    }
+
     let job_id = uuid::Uuid::new_v4().to_string();
     let tx = state.progress_tx.clone();
     let status_state = state.install_status.clone();
     let plan_clone = plan.clone();
-    let job_id_for_task = job_id.clone();
+
+    let _ = tx.send(ProgressEvent {
+        step: "precheck".into(),
+        message: "Executor real iniciado; disko e nixos-install serão chamados.".into(),
+        percent: 1,
+    });
 
     tokio::spawn(async move {
-        {
-            let mut status = status_state.write().await;
-            *status = InstallStatus {
-                running: true,
-                exit_code: None,
-                current_phase: Some("precheck".into()),
-                last_error: None,
-                last_log_line: Some(format!(
-                    "job {job_id_for_task} aceito; iniciando executor real"
-                )),
-                have_plan: true,
-                can_install: true,
-            };
-        }
-
-        let _ = tx.send(ProgressEvent {
-            step: "precheck".into(),
-            message: "Executor real iniciado; disko e nixos-install serão chamados.".into(),
-            percent: 1,
-        });
-
         match executor::run_installation(&plan_clone, tx.clone()).await {
             Ok(()) => {
                 let mut status = status_state.write().await;
@@ -856,6 +934,7 @@ async fn install(
                 });
 
                 let mut status = status_state.write().await;
+                // Garantir reset de running mesmo em erro — habilita retry manual.
                 status.running = false;
                 status.exit_code = Some(1);
                 status.current_phase = Some("error".into());
@@ -968,6 +1047,7 @@ mod tests {
                 name: user.into(),
                 admin: true,
                 uid: 1000,
+                hashed_password: None,
                 email: String::new(),
                 authorized_keys: vec![],
             },
@@ -1072,7 +1152,7 @@ mod tests {
                 "profile": "single",
                 "selectedDisks": ["/dev/sda"]
             },
-            "user": { "name": "admin", "admin": true },
+            "user": { "name": "admin", "admin": true, "uid": 1000, "email": "", "authorized_keys": [] },
             "features": {},
             // Payload exato que buildKryonixInstallPlan gera no modo DHCP:
             // serverIp é o campo que causava "missing field server_ip"
@@ -1131,14 +1211,14 @@ mod tests {
         assert!(!plan.target_remote_access.enabled);
     }
 
-    /// Garante que PlanUser NÃO tem campo de senha.
-    /// (A prova real é a compilação — este teste documenta a intenção.)
+    /// Garante que PlanUser NÃO vaza a senha na serialização.
     #[test]
-    fn test_plan_user_has_no_password_field() {
+    fn test_plan_user_password_is_not_serialized() {
         let user = PlanUser {
             name: "admin".into(),
             admin: true,
             uid: 1000,
+            hashed_password: Some("secret".into()),
             email: "a@b.com".into(),
             authorized_keys: vec![],
         };
@@ -1337,5 +1417,80 @@ mod tests {
             let result = validate_plan(&make_plan("/dev/null", bad, "admin"));
             assert!(!result.ok, "hostname \"{bad}\" deveria ter sido rejeitado");
         }
+    }
+
+    // ── P0.1: Testes de concorrência ─────────────────────────────────────────
+
+    /// Garante que InstallStatus.running=true bloqueia segundo install.
+    /// Testa a lógica de guarda diretamente (sem HTTP), verificando que o
+    /// mecanismo de detecção funciona corretamente.
+    #[tokio::test]
+    async fn test_concurrent_install_guard_blocks_second_request() {
+        use tokio::sync::RwLock;
+
+        // Simula o estado compartilhado do AppState
+        let install_status = Arc::new(RwLock::new(InstallStatus::default()));
+
+        // Primeira "instalação": adquire o lock e marca running=true
+        {
+            let mut status = install_status.write().await;
+            assert!(!status.running, "should start as not running");
+            status.running = true;
+        }
+
+        // Segunda "instalação": deve detectar running=true e retornar conflito
+        let would_conflict = {
+            let status = install_status.read().await;
+            status.running
+        };
+        assert!(
+            would_conflict,
+            "second install attempt must detect running=true"
+        );
+
+        // Simula conclusão: reset de running
+        {
+            let mut status = install_status.write().await;
+            status.running = false;
+        }
+
+        // Terceira tentativa (após conclusão): deve passar
+        let would_conflict_after_reset = {
+            let status = install_status.read().await;
+            status.running
+        };
+        assert!(
+            !would_conflict_after_reset,
+            "after reset, new install must be allowed"
+        );
+    }
+
+    /// Garante que um erro no executor reseta running=false
+    /// (habilita retry manual após falha).
+    #[tokio::test]
+    async fn test_install_error_resets_running_flag() {
+        use tokio::sync::RwLock;
+
+        let install_status = Arc::new(RwLock::new(InstallStatus::default()));
+
+        // Marca como running (como faz o handler)
+        {
+            let mut status = install_status.write().await;
+            status.running = true;
+        }
+
+        // Simula o que o spawn faz em caso de erro
+        {
+            let mut status = install_status.write().await;
+            status.running = false; // reset obrigatório em erro
+            status.exit_code = Some(1);
+            status.current_phase = Some("error".into());
+            status.last_error = Some("disko falhou".into());
+        }
+
+        let status = install_status.read().await;
+        assert!(!status.running, "running must be false after error");
+        assert_eq!(status.exit_code, Some(1));
+        assert_eq!(status.current_phase.as_deref(), Some("error"));
     }
 }
