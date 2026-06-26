@@ -23,7 +23,10 @@ use std::convert::Infallible;
 use std::process::Command;
 use std::sync::Arc;
 use tokio::sync::{RwLock, broadcast};
-use tower_http::{cors::CorsLayer, services::ServeDir};
+use tower_http::{
+    cors::{AllowOrigin, Any, CorsLayer},
+    services::ServeDir,
+};
 
 // ── Shared state ──────────────────────────────────────────────────────────────
 
@@ -35,6 +38,8 @@ pub struct AppState {
     pub auth: auth::SharedAuthState,
     /// Reusable HTTP client (connection pooling, rustls)
     pub http_client: reqwest::Client,
+    /// Token for destructive API calls
+    pub installer_token: String,
 }
 
 // ── Common error type ─────────────────────────────────────────────────────────
@@ -93,6 +98,8 @@ pub struct InstallPlan {
     pub disk: PlanDisk,
     pub user: PlanUser,
     pub features: serde_json::Value,
+    #[serde(default)]
+    pub confirmed_features: Vec<String>,
     #[serde(default)]
     pub network: NetworkPlan,
     /// Controla se openssh deve ser habilitado no sistema instalado.
@@ -220,7 +227,7 @@ impl Check {
     }
 }
 
-#[derive(Serialize, Clone, Default)]
+#[derive(Serialize, Deserialize, Clone, Default)]
 struct InstallStatus {
     running: bool,
     #[serde(rename = "exitCode")]
@@ -235,6 +242,21 @@ struct InstallStatus {
     have_plan: bool,
     #[serde(rename = "canInstall")]
     can_install: bool,
+}
+
+fn save_install_state(status: &InstallStatus) {
+    if let Ok(json) = serde_json::to_string_pretty(status) {
+        let _ = std::fs::write("/tmp/kryonix-install-state.json", json);
+    }
+}
+
+fn load_install_state() -> InstallStatus {
+    if let Ok(json) = std::fs::read_to_string("/tmp/kryonix-install-state.json") {
+        if let Ok(status) = serde_json::from_str(&json) {
+            return status;
+        }
+    }
+    InstallStatus::default()
 }
 
 #[derive(Deserialize)]
@@ -256,12 +278,20 @@ async fn main() {
         .build()
         .expect("Failed to build HTTP client");
 
+    let installer_token = std::env::var("KRYONIX_INSTALLER_TOKEN")
+        .unwrap_or_else(|_| uuid::Uuid::new_v4().to_string());
+    println!("============================================================");
+    println!("KRYONIX INSTALLER TOKEN: {}", installer_token);
+    println!("Pass this token in the X-Kryonix-Installer-Token header.");
+    println!("============================================================");
+
     let state = Arc::new(AppState {
         log_sender: Arc::new(log_tx),
         progress_tx: Arc::new(progress_tx),
-        install_status: Arc::new(RwLock::new(InstallStatus::default())),
+        install_status: Arc::new(RwLock::new(load_install_state())),
         auth: auth::new_auth_state(),
         http_client,
+        installer_token,
     });
 
     let ui_dir = std::env::var("KRYONIX_INSTALLER_UI_DIR")
@@ -309,12 +339,40 @@ async fn main() {
         .route("/api/partition", post(partition_endpoint))
         .route("/api/reboot", post(reboot_endpoint))
         .route("/api/stream", get(stream_logs))
-        .layer(CorsLayer::permissive())
+        .layer(
+            CorsLayer::new()
+                .allow_methods(Any)
+                .allow_headers(Any)
+                .allow_origin(AllowOrigin::predicate(
+                    |origin: &axum::http::HeaderValue, _request_parts| {
+                        if let Ok(s) = origin.to_str() {
+                            s.starts_with("http://127.0.0.1")
+                                || s.starts_with("http://localhost")
+                                || s.starts_with("http://[::1]")
+                        } else {
+                            false
+                        }
+                    },
+                )),
+        )
         .with_state(state)
         .fallback_service(ServeDir::new(ui_dir).fallback(ServeDir::new("ui/static")));
 
     let bind_addr =
         std::env::var("KRYONIX_INSTALLER_BIND").unwrap_or_else(|_| "127.0.0.1:8080".to_string());
+
+    if (bind_addr.starts_with("0.0.0.0") || bind_addr.starts_with("[::]"))
+        && std::env::var("KRYONIX_ALLOW_REMOTE_BIND").is_err()
+    {
+        eprintln!(
+            "ERROR: Destructive API is binding to {} without explicit authorization.",
+            bind_addr
+        );
+        eprintln!("If you are absolutely sure you want to expose the installer to the network,");
+        eprintln!("set KRYONIX_ALLOW_REMOTE_BIND=1 in your environment.");
+        std::process::exit(1);
+    }
+
     let listener = tokio::net::TcpListener::bind(&bind_addr).await.unwrap();
     println!(
         "Kryonix Installer API → http://{}",
@@ -516,6 +574,7 @@ async fn probe() -> Result<Json<serde_json::Value>, ApiError> {
 async fn plan(Json(req): Json<PlanRequest>) -> Json<InstallPlan> {
     Json(InstallPlan {
         version: 1,
+        confirmed_features: vec![],
         hostname: req.hostname.unwrap_or_else(|| "kryonix".into()),
         timezone: req.timezone.unwrap_or_else(|| "America/Cuiaba".into()),
         locale: req.locale.unwrap_or_else(|| "pt_BR.UTF-8".into()),
@@ -556,16 +615,51 @@ fn hash_password_if_needed(plan: &mut InstallPlan) {
                 .output()
             {
                 if output.status.success() {
-                    plan.user.hashed_password = Some(String::from_utf8_lossy(&output.stdout).trim().to_string());
+                    plan.user.hashed_password =
+                        Some(String::from_utf8_lossy(&output.stdout).trim().to_string());
                 }
             }
         }
     }
 }
 
-async fn dry_run(Json(mut plan): Json<InstallPlan>) -> impl IntoResponse {
+async fn dry_run(
+    State(state): State<Arc<AppState>>,
+    headers: axum::http::HeaderMap,
+    Json(mut plan): Json<InstallPlan>,
+) -> impl IntoResponse {
+    let token = headers
+        .get("X-Kryonix-Installer-Token")
+        .and_then(|v| v.to_str().ok())
+        .unwrap_or("");
+    if token != state.installer_token {
+        return (
+            StatusCode::UNAUTHORIZED,
+            Json(ErrorResponse {
+                error: "UNAUTHORIZED".into(),
+                details: Some("Token X-Kryonix-Installer-Token inválido ou ausente.".into()),
+            }),
+        )
+            .into_response();
+    }
+
     hash_password_if_needed(&mut plan);
-    let result = validate_plan(&plan);
+    let mut result = validate_plan(&plan);
+
+    if result.ok {
+        // P0.5: Run real disko dry-run to validate disk config
+        if let Err(e) = executor::partition::run_disko_dry_run(&plan).await {
+            result.ok = false;
+            result
+                .checks
+                .push(Check::fail(format!("Disko dry-run falhou: {}", e)));
+        } else {
+            result
+                .checks
+                .push(Check::pass("Disko dry-run concluído com sucesso"));
+        }
+    }
+
     // 200 somente se ok==true; 422 se o plano/alvo é semanticamente inválido.
     // (Body/JSON malformado já vira 400/422 no extractor Json antes de chegar aqui.)
     let status = if result.ok {
@@ -573,7 +667,7 @@ async fn dry_run(Json(mut plan): Json<InstallPlan>) -> impl IntoResponse {
     } else {
         StatusCode::UNPROCESSABLE_ENTITY
     };
-    (status, Json(result))
+    (status, Json(result)).into_response()
 }
 
 /// Verifica se o hostname está dentro do subset seguro (RFC-1123 light):
@@ -751,6 +845,108 @@ fn validate_plan(plan: &InstallPlan) -> DryRunResult {
         ok = false;
     }
 
+    // P0.8: Feature Gating with strict allowlist
+    enum FeatureStatus {
+        Supported,
+        PartialRequiresConfirmation,
+        BlockedStub,
+        BlockedLegacy,
+        Unknown,
+    }
+
+    fn classify_feature(domain: &str, name: &str) -> FeatureStatus {
+        let feature_id = format!("{}.{}", domain, name);
+        // TODO: Futuramente consumir do docs/FEATURE_REGISTRY.md do core
+        match feature_id.as_str() {
+            "remote.openssh"
+            | "network.openssh"
+            | "system.impermanence"
+            | "security.tpm"
+            | "storage.zfs"
+            | "mcp.enabled"
+            | "desktop.waywallen"
+            | "desktop.hyprland"
+            | "desktop.plasma"
+            | "gaming.steam"
+            | "gaming.gamemode"
+            | "development.rust"
+            | "development.docker"
+            | "observability.prometheus" => FeatureStatus::Supported,
+
+            "ai.local_llm" | "ai.ollama" | "virtualization.vms" => {
+                FeatureStatus::PartialRequiresConfirmation
+            }
+
+            "ai.lightrag"
+            | "ai.open-webui"
+            | "ai.openWebui"
+            | "remote.desktop.server"
+            | "remote.desktop.client"
+            | "ai.brain.client"
+            | "ai.brain.server" => FeatureStatus::BlockedStub,
+
+            "network.legacy_bridge" | "system.legacy_boot" | "remoteDesktop" => {
+                FeatureStatus::BlockedLegacy
+            }
+            _ => FeatureStatus::Unknown,
+        }
+    }
+
+    if let Some(obj) = plan.features.as_object() {
+        for (domain_name, domain) in obj {
+            if let Some(features) = domain.as_object() {
+                for (key, val) in features {
+                    if val.as_bool().unwrap_or(false) {
+                        let feature_id = format!("{}.{}", domain_name, key);
+                        match classify_feature(domain_name, key) {
+                            FeatureStatus::Supported => {
+                                checks.push(Check::pass(format!(
+                                    "Feature '{}' é suportada.",
+                                    feature_id
+                                )));
+                            }
+                            FeatureStatus::PartialRequiresConfirmation => {
+                                if plan.confirmed_features.contains(&feature_id) {
+                                    checks.push(Check::pass(format!(
+                                        "Feature '{}' parcial ativada com confirmação.",
+                                        feature_id
+                                    )));
+                                } else {
+                                    checks.push(Check::fail(format!(
+                                        "Feature '{}' é parcial. Requer confirmação explícita no payload (confirmed_features).",
+                                        feature_id
+                                    )));
+                                    ok = false;
+                                }
+                            }
+                            FeatureStatus::BlockedStub => {
+                                checks.push(Check::fail(format!(
+                                    "Feature '{}' é um stub e não pode ser ativada.",
+                                    feature_id
+                                )));
+                                ok = false;
+                            }
+                            FeatureStatus::BlockedLegacy => {
+                                checks.push(Check::fail(format!(
+                                    "Feature '{}' é legacy e não pode ser ativada.",
+                                    feature_id
+                                )));
+                                ok = false;
+                            }
+                            FeatureStatus::Unknown => {
+                                checks.push(Check::fail(format!(
+                                    "Feature '{}' é desconhecida e não pode ser ativada pelo installer.",
+                                    feature_id
+                                )));
+                                ok = false;
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+
     DryRunResult { ok, checks }
 }
 
@@ -836,8 +1032,24 @@ struct SafetyResponse {
 
 async fn install(
     State(state): State<Arc<AppState>>,
+    headers: axum::http::HeaderMap,
     Json(mut plan): Json<InstallPlan>,
 ) -> impl IntoResponse {
+    let token = headers
+        .get("X-Kryonix-Installer-Token")
+        .and_then(|v| v.to_str().ok())
+        .unwrap_or("");
+    if token != state.installer_token {
+        return (
+            StatusCode::UNAUTHORIZED,
+            Json(ErrorResponse {
+                error: "UNAUTHORIZED".into(),
+                details: Some("Token X-Kryonix-Installer-Token inválido ou ausente.".into()),
+            }),
+        )
+            .into_response();
+    }
+
     hash_password_if_needed(&mut plan);
 
     // dry-run mode → only validate, never touch disks
@@ -903,6 +1115,7 @@ async fn install(
         status.last_log_line = Some("job aceito; iniciando executor real".to_string());
         status.have_plan = true;
         status.can_install = true;
+        save_install_state(&status);
     }
 
     let job_id = uuid::Uuid::new_v4().to_string();
@@ -925,6 +1138,7 @@ async fn install(
                 status.current_phase = Some("done".into());
                 status.last_error = None;
                 status.last_log_line = Some("Instalação concluída pelo executor real".into());
+                save_install_state(&status);
             }
             Err(error) => {
                 let _ = tx.send(ProgressEvent {
@@ -940,6 +1154,7 @@ async fn install(
                 status.current_phase = Some("error".into());
                 status.last_error = Some(error.clone());
                 status.last_log_line = Some(error);
+                save_install_state(&status);
             }
         }
     });
@@ -1029,6 +1244,7 @@ mod tests {
     fn make_plan(disk: &str, hostname: &str, user: &str) -> InstallPlan {
         InstallPlan {
             version: 1,
+            confirmed_features: vec![],
             hostname: hostname.into(),
             timezone: "America/Cuiaba".into(),
             locale: "pt_BR.UTF-8".into(),
@@ -1055,6 +1271,95 @@ mod tests {
             network: Default::default(),
             target_remote_access: Default::default(),
         }
+    }
+
+    #[test]
+    fn test_feature_supported_pass() {
+        let mut plan = make_plan("/dev/null", "teste", "admin");
+        plan.features = serde_json::json!({
+            "system": { "impermanence": true }
+        });
+        let res = validate_plan(&plan);
+        assert!(
+            res.checks
+                .iter()
+                .any(|c| c.ok && c.message.contains("suportada"))
+        );
+    }
+
+    #[test]
+    fn test_feature_unknown_fails() {
+        let mut plan = make_plan("/dev/null", "teste", "admin");
+        plan.features = serde_json::json!({
+            "madeup": { "feature": true }
+        });
+        let res = validate_plan(&plan);
+        assert!(!res.ok);
+        assert!(
+            res.checks
+                .iter()
+                .any(|c| !c.ok && c.message.contains("desconhecida"))
+        );
+    }
+
+    #[test]
+    fn test_feature_stub_fails() {
+        let mut plan = make_plan("/dev/null", "teste", "admin");
+        plan.features = serde_json::json!({
+            "ai": { "lightrag": true }
+        });
+        let res = validate_plan(&plan);
+        assert!(!res.ok);
+        assert!(
+            res.checks
+                .iter()
+                .any(|c| !c.ok && c.message.contains("stub"))
+        );
+    }
+
+    #[test]
+    fn test_feature_legacy_fails() {
+        let mut plan = make_plan("/dev/null", "teste", "admin");
+        plan.features = serde_json::json!({
+            "system": { "legacy_boot": true }
+        });
+        let res = validate_plan(&plan);
+        assert!(!res.ok);
+        assert!(
+            res.checks
+                .iter()
+                .any(|c| !c.ok && c.message.contains("legacy"))
+        );
+    }
+
+    #[test]
+    fn test_feature_partial_without_confirmation_fails() {
+        let mut plan = make_plan("/dev/null", "teste", "admin");
+        plan.features = serde_json::json!({
+            "ai": { "ollama": true }
+        });
+        let res = validate_plan(&plan);
+        assert!(!res.ok);
+        assert!(
+            res.checks
+                .iter()
+                .any(|c| !c.ok && c.message.contains("parcial"))
+        );
+    }
+
+    #[test]
+    fn test_feature_partial_with_confirmation_passes() {
+        let mut plan = make_plan("/dev/null", "teste", "admin");
+        plan.features = serde_json::json!({
+            "ai": { "ollama": true }
+        });
+        plan.confirmed_features = vec!["ai.ollama".into()];
+        let res = validate_plan(&plan);
+        assert!(
+            res.checks
+                .iter()
+                .any(|c| c.ok && c.message.contains("confirmação"))
+        );
     }
 
     // ── Testes de contrato UI↔backend ─────────────────────────────────────────
