@@ -284,8 +284,9 @@ export function buildInstallPlanPayload(draftInput) {
     },
     admin: {
       user: sanitizeString(draft.adminUser),
-      uid: Number.isFinite(Number(draft.adminUid)) ? Number(draft.adminUid) : 0,
+      uid: 1000,
       email: sanitizeString(draft.adminEmail),
+      fullName: sanitizeString(draft.adminFullName),
       authorizedKeys: uniqueStrings(parseAuthorizedKeys(draft.adminAuthorizedKeys)),
     },
   };
@@ -410,7 +411,7 @@ function validateFinalDraft(draft, payload, secrets, result) {
   }
 
   if (payload.admin.uid < 1000) {
-    addFieldError(result, 'adminUid', 'UID do administrador deve ser 1000 ou maior.');
+    addBlockingIssue(result, 'UID do administrador deve ser 1000 ou maior.');
   }
 
   if (!emailPattern.test(payload.admin.email)) {
@@ -420,7 +421,7 @@ function validateFinalDraft(draft, payload, secrets, result) {
 
 function validateAdminStep(payload, secrets, result, draft) {
   if (!payload.admin.user) addFieldError(result, 'adminUser', 'Informe o usuário administrador.');
-  if (payload.admin.uid < 1000) addFieldError(result, 'adminUid', 'UID do administrador deve ser 1000 ou maior.');
+  if (!payload.admin.fullName) addFieldError(result, 'adminFullName', 'Informe o nome completo do administrador.');
   if (!payload.admin.email) {
     addFieldError(result, 'adminEmail', 'Informe o e-mail do administrador.');
   } else if (!emailPattern.test(payload.admin.email)) {

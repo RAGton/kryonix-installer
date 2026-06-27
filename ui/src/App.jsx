@@ -415,7 +415,7 @@ export default function App() {
         />
       )}
     >
-      <div className="wizard-page" ref={pageRef} style={{ display: 'contents' }}>
+      <div className="wizard-page animate-fade-in w-full h-full flex flex-col min-h-0" key={step.id} ref={pageRef}>
         {currentPage}
       </div>
     </Layout>

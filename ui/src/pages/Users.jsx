@@ -1,4 +1,4 @@
-import { useMemo } from 'react';
+import { useMemo, useState } from 'react';
 import FieldError from '../components/FieldError.jsx';
 
 function passwordStrength(password) {
@@ -14,6 +14,7 @@ function passwordStrength(password) {
 }
 
 export default function Users({ wizard, onChange, validation }) {
+  const [showSsh, setShowSsh] = useState(false);
   const strength = useMemo(() => passwordStrength(wizard.adminPassword || ''), [wizard.adminPassword]);
   const sshKeys = useMemo(
     () => String(wizard.adminAuthorizedKeys || '').split('\n').map((line) => line.trim()).filter(Boolean),
@@ -31,9 +32,9 @@ export default function Users({ wizard, onChange, validation }) {
             <FieldError message={fieldErrors.adminUser} />
           </div>
           <div>
-            <label className="label-text" htmlFor="adminUid">UID</label>
-            <input id="adminUid" type="number" className="input-shell" value={wizard.adminUid} onChange={(e) => onChange({ adminUid: Number(e.target.value || 0) })} />
-            <FieldError message={fieldErrors.adminUid} />
+            <label className="label-text" htmlFor="adminFullName">Nome completo</label>
+            <input id="adminFullName" className="input-shell" value={wizard.adminFullName} onChange={(e) => onChange({ adminFullName: e.target.value })} placeholder="Ex: RAGton Administrator" />
+            <FieldError message={fieldErrors.adminFullName} />
           </div>
           <div className="sm:col-span-2">
             <label className="label-text" htmlFor="adminEmail">E-mail</label>
@@ -81,23 +82,39 @@ export default function Users({ wizard, onChange, validation }) {
 
       <section className="section-panel flex min-h-0 flex-col overflow-hidden">
         <div className="mb-4">
-          <h3 className="text-lg font-bold text-white">Chaves SSH autorizadas</h3>
-          <p className="mt-1 text-sm text-slate-400">Uma chave pública por linha. Elas serão escritas em `adminAuthorizedKeys` no plano final.</p>
+          <h3 className="text-lg font-bold text-white">Acesso Remoto (SSH)</h3>
+          <p className="mt-1 text-sm text-slate-400">Configure chaves públicas para acesso sem senha.</p>
         </div>
 
-        <textarea
-          className="input-shell min-h-[220px] flex-1 resize-none font-mono text-xs leading-6"
-          value={wizard.adminAuthorizedKeys}
-          onChange={(e) => onChange({ adminAuthorizedKeys: e.target.value })}
-          placeholder="ssh-ed25519 AAAAC3... usuario@host"
-        />
-
-        <div className="mt-4 rounded-2xl border border-white/10 bg-slate-950/60 p-4">
+        <div className="rounded-2xl border border-white/10 bg-slate-950/60 p-4 mb-4">
           <div className="text-xs font-semibold uppercase tracking-[0.24em] text-slate-400">Resumo SSH</div>
-          <div className="mt-2 text-lg font-bold text-white">{sshKeys.length} chave(s)</div>
-          <div className="mt-2 max-h-[120px] overflow-y-auto text-xs text-slate-400">
+          <div className="mt-2 text-lg font-bold text-white">{sshKeys.length} chave(s) ativas</div>
+          <div className="mt-2 max-h-[120px] overflow-y-auto text-xs text-slate-400 custom-scrollbar">
             {sshKeys.length === 0 ? 'Nenhuma chave informada.' : sshKeys.map((key, index) => <div key={`${index}-${key.slice(0, 12)}`} className="mb-1 truncate">{key}</div>)}
           </div>
+        </div>
+
+        <div className="flex-1 flex flex-col min-h-0 border border-white/10 rounded-2xl overflow-hidden bg-white/[0.02]">
+          <button
+            type="button"
+            className="flex items-center justify-between w-full p-4 hover:bg-white/5 transition-colors"
+            onClick={() => setShowSsh(!showSsh)}
+          >
+            <span className="font-bold text-sm text-white">Editar Chaves SSH</span>
+            <span className="text-slate-400 text-xs font-bold tracking-wider">{showSsh ? '▲ OCULTAR' : '▼ MOSTRAR'}</span>
+          </button>
+          
+          {showSsh && (
+            <div className="flex-1 flex flex-col p-4 pt-0 border-t border-white/5 min-h-0 animate-fade-in">
+              <p className="mb-3 text-xs text-slate-400">Uma chave pública por linha. Elas serão escritas em <code className="text-accent-blue bg-accent-blue/10 px-1 py-0.5 rounded">adminAuthorizedKeys</code> no plano final.</p>
+              <textarea
+                className="input-shell flex-1 min-h-[120px] resize-none font-mono text-xs leading-6 custom-scrollbar"
+                value={wizard.adminAuthorizedKeys}
+                onChange={(e) => onChange({ adminAuthorizedKeys: e.target.value })}
+                placeholder="ssh-ed25519 AAAAC3... usuario@host"
+              />
+            </div>
+          )}
         </div>
       </section>
     </div>

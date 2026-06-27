@@ -275,6 +275,7 @@
         "user": { "type": "string", "minLength": 1 },
         "uid": { "type": "integer", "minimum": 1000 },
         "email": { "type": "string", "format": "email" },
+        "fullName": { "type": "string" },
         "authorizedKeys": {
           "type": "array",
           "items": { "type": "string" },

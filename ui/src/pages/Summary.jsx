@@ -147,7 +147,7 @@ export default function Summary({ wizard, uiState, onChange, validation }) {
         }
         if (json.admin) {
           if (json.admin.user) draftPatch.adminUser = json.admin.user;
-          if (json.admin.uid) draftPatch.adminUid = json.admin.uid;
+          if (json.admin.fullName) draftPatch.adminFullName = json.admin.fullName;
           if (json.admin.email) draftPatch.adminEmail = json.admin.email;
           if (json.admin.authorizedKeys) draftPatch.adminAuthorizedKeys = json.admin.authorizedKeys.join('\n');
         }
@@ -203,7 +203,7 @@ export default function Summary({ wizard, uiState, onChange, validation }) {
           </div>
           <div className="bg-white/50 dark:bg-bg-elevated/30 border border-slate-200/50 dark:border-white/5 rounded-xl p-4 shadow-sm transition-all hover:bg-white/80 dark:hover:bg-bg-elevated/50">
             <div className="text-[10px] font-bold uppercase tracking-widest text-slate-500 dark:text-text-muted">Admin</div>
-            <div className="mt-2 text-sm font-semibold text-slate-900 dark:text-text-primary">{wizard.adminUser} • UID {wizard.adminUid}</div>
+            <div className="mt-2 text-sm font-semibold text-slate-900 dark:text-text-primary">{wizard.adminFullName || wizard.adminUser} ({wizard.adminUser})</div>
             <div className="mt-1 text-[13px] text-slate-600 dark:text-text-secondary">{wizard.adminEmail}</div>
             <div className="mt-1 text-[13px] text-slate-500 dark:text-text-muted">{sshCount} chave(s) SSH</div>
           </div>
