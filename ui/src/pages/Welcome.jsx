@@ -135,8 +135,8 @@ export default function Welcome({ wizard, onChange }) {
     <div className="flex flex-col items-center justify-center h-full max-w-3xl mx-auto w-full px-4 text-center animate-fade-in-up pb-8 custom-scrollbar overflow-y-auto">
       {/* Branding */}
       <div className="mt-4 mb-10 flex flex-col items-center">
-        <div className="mb-8 bg-transparent">
-          <EagleLogo className="w-40 h-40 md:w-48 md:h-48" />
+        <div className="mb-4 bg-transparent">
+          <EagleLogo className="w-64 h-64 md:w-72 md:h-72" />
         </div>
         <h2 className="text-4xl md:text-5xl font-bold tracking-tight text-slate-900 dark:text-white mb-4">
           {t('welcome.title')}

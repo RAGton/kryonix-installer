@@ -22,8 +22,8 @@ export default function Layout({
           
           {/* Top Navbar / Stepper */}
           <header className="flex-none bg-transparent border-b border-slate-200/50 dark:border-white/5 px-6 py-4 flex items-center justify-between">
-            <h1 className="text-slate-900 dark:text-text-primary font-bold tracking-widest text-sm flex gap-3 items-center">
-              <EagleLogo className="w-5 h-5" /> KRYONIX <span className="text-slate-500 dark:text-text-secondary font-medium text-xs tracking-normal">Installer</span>
+            <h1 className="text-slate-900 dark:text-text-primary font-bold tracking-widest text-base flex gap-3 items-center">
+              <EagleLogo className="w-8 h-8" /> KRYONIX <span className="text-slate-500 dark:text-text-secondary font-medium text-xs tracking-normal">Installer</span>
             </h1>
             
             <nav className="flex items-center gap-2 overflow-x-auto no-scrollbar" aria-label="Fases da Instalação">
