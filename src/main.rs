@@ -8,7 +8,7 @@ mod profiles;
 
 use axum::{
     Json, Router,
-    extract::{Path, State, ConnectInfo},
+    extract::{ConnectInfo, Path, State},
     http::StatusCode,
     response::{
         IntoResponse,
@@ -251,10 +251,10 @@ fn save_install_state(status: &InstallStatus) {
 }
 
 fn load_install_state() -> InstallStatus {
-    if let Ok(json) = std::fs::read_to_string("/tmp/kryonix-install-state.json") {
-        if let Ok(status) = serde_json::from_str(&json) {
-            return status;
-        }
+    if let Ok(json) = std::fs::read_to_string("/tmp/kryonix-install-state.json")
+        && let Ok(status) = serde_json::from_str(&json)
+    {
+        return status;
     }
     InstallStatus::default()
 }
@@ -380,7 +380,12 @@ async fn main() {
         "Kryonix Installer API → http://{}",
         listener.local_addr().unwrap()
     );
-    axum::serve(listener, app.into_make_service_with_connect_info::<std::net::SocketAddr>()).await.unwrap();
+    axum::serve(
+        listener,
+        app.into_make_service_with_connect_info::<std::net::SocketAddr>(),
+    )
+    .await
+    .unwrap();
 }
 
 async fn get_csrf_token(
@@ -393,7 +398,7 @@ async fn get_csrf_token(
             Json(ErrorResponse {
                 error: "FORBIDDEN".into(),
                 details: Some("CSRF token can only be retrieved from localhost".into()),
-            })
+            }),
         ));
     }
     Ok(Json(serde_json::json!({
@@ -626,20 +631,18 @@ async fn plan(Json(req): Json<PlanRequest>) -> Json<InstallPlan> {
 // ── POST /dry-run ─────────────────────────────────────────────────────────────
 
 fn hash_password_if_needed(plan: &mut InstallPlan) {
-    if let Some(pwd) = plan.user.hashed_password.as_deref() {
-        if !pwd.is_empty() && !pwd.starts_with('$') {
-            if let Ok(output) = std::process::Command::new("mkpasswd")
-                .arg("-m")
-                .arg("yescrypt")
-                .arg(pwd)
-                .output()
-            {
-                if output.status.success() {
-                    plan.user.hashed_password =
-                        Some(String::from_utf8_lossy(&output.stdout).trim().to_string());
-                }
-            }
-        }
+    if let Some(pwd) = plan.user.hashed_password.as_deref()
+        && !pwd.is_empty()
+        && !pwd.starts_with('$')
+        && let Ok(output) = std::process::Command::new("mkpasswd")
+            .arg("-m")
+            .arg("yescrypt")
+            .arg(pwd)
+            .output()
+        && output.status.success()
+    {
+        plan.user.hashed_password =
+            Some(String::from_utf8_lossy(&output.stdout).trim().to_string());
     }
 }
 
@@ -659,6 +662,40 @@ async fn dry_run(
                 error: "UNAUTHORIZED".into(),
                 details: Some("Token X-Kryonix-Installer-Token inválido ou ausente.".into()),
             }),
+        )
+            .into_response();
+    }
+
+    let valid_modes = [
+        "destroy",
+        "format",
+        "mount",
+        "destroy,format,mount",
+        "format,mount",
+    ];
+    let mut current_mode = plan.disk.mode.as_str();
+    if current_mode == "disko" || current_mode == "dry-run" {
+        plan.disk.mode = "destroy,format,mount".to_string();
+        current_mode = "destroy,format,mount";
+    }
+
+    if !valid_modes.contains(&current_mode) {
+        return (
+            StatusCode::UNPROCESSABLE_ENTITY,
+            Json(serde_json::json!({
+                "ok": false,
+                "code": "INVALID_DISK_MODE",
+                "message": "Modo de disco inválido.",
+                "action": "Selecione um modo de particionamento válido antes de continuar.",
+                "details": {
+                    "field": "disk.mode",
+                    "received": current_mode,
+                    "accepted": valid_modes
+                },
+                "recoverable": true,
+                "destructiveActionStarted": false,
+                "sessionId": state.installer_token
+            })),
         )
             .into_response();
     }

@@ -22,7 +22,7 @@ pub async fn run_disko(
     });
 
     let result = tokio::process::Command::new("disko")
-        .args(["--mode", "disko", config_path])
+        .args(["--mode", &plan.disk.mode, config_path])
         .output()
         .await
         .map_err(|e| format!("disko não encontrado: {e}"))?;
@@ -52,7 +52,7 @@ pub async fn run_disko_dry_run(plan: &InstallPlan) -> Result<(), String> {
         .map_err(|e| format!("Falha ao escrever config disko: {e}"))?;
 
     let result = tokio::process::Command::new("disko")
-        .args(["--mode", "dry-run", config_path])
+        .args(["--mode", &plan.disk.mode, "--dry-run", config_path])
         .output()
         .await
         .map_err(|e| format!("disko dry-run não encontrado ou falhou ao iniciar: {e}"))?;
