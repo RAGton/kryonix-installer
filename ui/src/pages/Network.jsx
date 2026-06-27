@@ -6,6 +6,19 @@ function sanitizeIp(value) {
   return String(value || '').split('/')[0].trim();
 }
 
+function netmaskToPrefix(netmask) {
+  const parts = netmask.split('.').map(Number);
+  let prefix = 0;
+  for (const part of parts) {
+    let p = part;
+    while (p > 0) {
+      prefix += p & 1;
+      p >>= 1;
+    }
+  }
+  return prefix || 24;
+}
+
 function isUsableRemoteIp(value) {
   const ip = sanitizeIp(value);
   if (!ip) return false;
@@ -203,6 +216,69 @@ export default function Network({ wizard, onChange, validation }) {
     setWifiSsid('');
     setWifiPassword('');
     onChange({ netOffline: true, netConnected: false });
+  };
+
+  const handleApplyNetwork = async () => {
+    const mode = wizard.mgmtMode || 'dhcp';
+    const iface = wizard.mgmtInterface;
+
+    if (!iface) return;
+
+    onChange({ netApplyError: '', netApplyBusy: true, networkDhcpPending: false });
+
+    let applyResult;
+    try {
+      if (mode === 'dhcp') {
+        applyResult = await installerApi.applyNetwork({
+          interface: iface,
+          mode: 'dhcp',
+          address: '',
+          prefix_length: 24,
+          gateway: '',
+          dns: (wizard.mgmtDns || '1.1.1.1,8.8.8.8').split(',').map(d => d.trim()).filter(Boolean),
+        });
+
+        if (applyResult?.applied && applyResult?.ip && applyResult.ip !== '0.0.0.0') {
+          onChange({ serverIp: applyResult.ip, mgmtGateway: applyResult.gateway || '', mgmtDns: applyResult.dns?.join(',') || wizard.mgmtDns, netApplyBusy: false });
+        } else {
+          onChange({ networkDhcpPending: true, netApplyBusy: false });
+        }
+      } else {
+        const address = wizard.serverIp;
+        const prefix = wizard.mgmtNetmask ? netmaskToPrefix(wizard.mgmtNetmask) : 24;
+        const gateway = wizard.mgmtGateway;
+        const dns = wizard.mgmtDns || '1.1.1.1,8.8.8.8';
+
+        if (!address || !gateway) {
+          onChange({ netApplyError: 'Modo estático: informe IP do servidor e gateway antes de aplicar.', netApplyBusy: false });
+          return;
+        }
+
+        applyResult = await installerApi.applyNetwork({
+          interface: iface,
+          mode: 'static',
+          address,
+          prefix_length: prefix,
+          gateway,
+          dns: dns.split(',').map(d => d.trim()).filter(Boolean),
+        });
+
+        if (applyResult?.applied) {
+          onChange({ serverIp: applyResult.ip, mgmtGateway: applyResult.gateway || gateway, mgmtDns: applyResult.dns?.join(',') || dns, netApplyBusy: false });
+        } else {
+          onChange({ netApplyError: 'O backend não aplicou a configuração de rede (/network/apply).', netApplyBusy: false });
+        }
+      }
+      // Status Live must be updated
+      await refreshStatus();
+    } catch (err) {
+      if (err instanceof TypeError && err.message.toLowerCase().includes('fetch')) {
+        console.warn('[Network] Conexão HTTP caiu. Provavelmente o backend reiniciou a rede com sucesso.');
+        onChange({ netApplyBusy: false });
+        return;
+      }
+      onChange({ netApplyError: getInstallerApiErrorMessage(err, 'Falha ao aplicar a configuração de rede.'), netApplyBusy: false });
+    }
   };
 
   const handleIpv4Change = (field) => (event) => {
@@ -468,16 +544,26 @@ export default function Network({ wizard, onChange, validation }) {
               </div>
             </div>
 
-            <label className="mt-4 flex items-center gap-2 rounded-xl border border-white/10 bg-slate-950/60 px-3 py-2.5 text-sm text-slate-200">
-              <input
-                type="checkbox"
-                className="h-4 w-4 rounded"
-                checked={Boolean(wizard.lanIdentified)}
-                onChange={(event) => onChange({ lanIdentified: event.target.checked })}
-                disabled={netApplyBusy}
-              />
-              Confirmei fisicamente a interface LAN/PXE ({wizard.mgmtInterface || 'não selecionada'}).
-            </label>
+            <div className="mt-4 flex items-center justify-between gap-4 rounded-xl border border-white/10 bg-slate-950/60 px-3 py-2.5">
+              <label className="flex items-center gap-2 text-sm text-slate-200">
+                <input
+                  type="checkbox"
+                  className="h-4 w-4 rounded"
+                  checked={Boolean(wizard.lanIdentified)}
+                  onChange={(event) => onChange({ lanIdentified: event.target.checked })}
+                  disabled={netApplyBusy}
+                />
+                Confirmei fisicamente a interface LAN/PXE ({wizard.mgmtInterface || 'não selecionada'}).
+              </label>
+              <button
+                type="button"
+                className="btn-primary !px-4 !py-1.5 text-xs"
+                onClick={handleApplyNetwork}
+                disabled={!wizard.mgmtInterface || netApplyBusy}
+              >
+                {netApplyBusy ? 'Aplicando…' : 'Aplicar na interface'}
+              </button>
+            </div>
           </div>
 
           <div className="rounded-2xl border border-white/10 bg-white/[0.03] p-4">

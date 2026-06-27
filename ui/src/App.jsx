@@ -182,111 +182,10 @@ export default function App() {
     [],
   );
 
-  // Handle network step next: apply network config before advancing
-  const handleNetworkNext = useCallback(async () => {
-    if (step.id !== 'network') {
-      goNext();
-      return;
-    }
-
-    const { applyNetwork } = installerApi;
-    const mode = draft.mgmtMode || 'dhcp';
-    const iface = draft.mgmtInterface;
-
-    if (!iface) {
-      // No interface selected, just advance
-      goNext();
-      return;
-    }
-
-    // Limpa estado de erro/pendência antes de uma nova tentativa de aplicar.
-    updateWizard({ netApplyError: '', netApplyBusy: true, networkDhcpPending: false });
-
-    let applyResult;
-    try {
-      if (mode === 'dhcp') {
-        // Apply DHCP
-        applyResult = await applyNetwork({
-          interface: iface,
-          mode: 'dhcp',
-          address: '',
-          prefix_length: 24,
-          gateway: '',
-          dns: (draft.mgmtDns || '1.1.1.1,8.8.8.8').split(',').map(d => d.trim()).filter(Boolean),
-        });
-
-        if (applyResult?.applied && applyResult?.ip && applyResult.ip !== '0.0.0.0') {
-          // Save detected IP to wizard
-          updateWizard({ serverIp: applyResult.ip, mgmtGateway: applyResult.gateway || '', mgmtDns: applyResult.dns?.join(',') || draft.mgmtDns, netApplyBusy: false });
-        } else {
-          // DHCP aplicado mas ainda sem lease/IP: avanço permitido com aviso visível.
-          updateWizard({ networkDhcpPending: true, netApplyBusy: false });
-        }
-      } else {
-        // Static mode - validate and apply
-        const address = draft.serverIp;
-        const prefix = draft.mgmtNetmask ? netmaskToPrefix(draft.mgmtNetmask) : 24;
-        const gateway = draft.mgmtGateway;
-        const dns = draft.mgmtDns || '1.1.1.1,8.8.8.8';
-
-        if (!address || !gateway) {
-          // Modo estático incompleto: erro visível, sem avanço silencioso.
-          updateWizard({
-            netApplyError: 'Modo estático: informe IP do servidor e gateway antes de aplicar.',
-            netApplyBusy: false,
-          });
-          return;
-        }
-
-        applyResult = await applyNetwork({
-          interface: iface,
-          mode: 'static',
-          address,
-          prefix_length: prefix,
-          gateway,
-          dns: dns.split(',').map(d => d.trim()).filter(Boolean),
-        });
-
-        if (applyResult?.applied) {
-          updateWizard({ serverIp: applyResult.ip, mgmtGateway: applyResult.gateway || gateway, mgmtDns: applyResult.dns?.join(',') || dns, netApplyBusy: false });
-        } else {
-          // Backend não aplicou: erro visível, não avança.
-          updateWizard({
-            netApplyError: 'O backend não aplicou a configuração de rede (/network/apply). Verifique interface, IP e gateway.',
-            netApplyBusy: false,
-          });
-          return;
-        }
-      }
-    } catch (err) {
-      console.error('[Network] applyNetwork failed:', err);
-      // No Remote Web, o 'nmcli con up' derruba a conexão e gera um TypeError de rede.
-      if (err instanceof TypeError && err.message.toLowerCase().includes('fetch')) {
-        console.warn('[Network] Conexão HTTP caiu. Provavelmente o backend reiniciou a rede com sucesso.');
-        updateWizard({ netApplyBusy: false });
-        goNext();
-        return;
-      }
-      
-      // Erro de comunicação/exceção real: mensagem visível na UI, sem avanço.
-      updateWizard({
-        netApplyError: getInstallerApiErrorMessage(err, 'Falha ao aplicar a configuração de rede (/network/apply).'),
-        netApplyBusy: false,
-      });
-      return;
-    }
-
-    // Advance to next step
-    goNext();
-  }, [step.id, draft, goNext, updateWizard]);
-
   const advanceWizardSafely = useCallback(() => {
-    if (step.id === 'network') {
-      return handleNetworkNext();
-    }
     goNext();
     return Promise.resolve();
-  }, [step.id, handleNetworkNext, goNext]);
+  }, [goNext]);
 
   const goBack = useCallback(
     () => setStepIndex((previous) => Math.max(0, previous - 1)),
@@ -473,7 +372,7 @@ export default function App() {
                 ? 'Nesta etapa, o avanço só é permitido pelo botão Próximo após marcar o aceite.'
                 : 'Pronto para avançar. Navegação rápida: Alt + ← / Alt + →'
           }
-          nextLabel={uiState.netApplyBusy ? 'Aplicando rede…' : step.id === 'summary' ? 'Ir para instalação' : step.id === 'install' ? 'Em execução' : 'Próximo'}
+          nextLabel={step.id === 'summary' ? 'Ir para instalação' : step.id === 'install' ? 'Em execução' : 'Próximo'}
         />
       )}
     >
