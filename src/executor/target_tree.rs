@@ -684,8 +684,18 @@ async fn write_features_generated(plan: &InstallPlan) -> Result<(), String> {
 
     // O SSH do sistema instalado é habilitado se target_remote_access for true
     // OU se a feature 'remote.openssh' foi selecionada no wizard.
-    let has_openssh_feature = plan.features.get("remote").and_then(|n| n.get("remote.openssh")).and_then(|v| v.as_bool()).unwrap_or(false)
-        || plan.features.get("network").and_then(|n| n.get("network.openssh")).and_then(|v| v.as_bool()).unwrap_or(false);
+    let has_openssh_feature = plan
+        .features
+        .get("remote")
+        .and_then(|n| n.get("remote.openssh"))
+        .and_then(|v| v.as_bool())
+        .unwrap_or(false)
+        || plan
+            .features
+            .get("network")
+            .and_then(|n| n.get("network.openssh"))
+            .and_then(|v| v.as_bool())
+            .unwrap_or(false);
     let openssh_block = if plan.target_remote_access.enabled || has_openssh_feature {
         "  services.openssh.enable = true;\n"
     } else {
