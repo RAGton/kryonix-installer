@@ -184,7 +184,7 @@ export default function Summary({ wizard, uiState, onChange, validation }) {
             </div>
           </div>
           <div className="bg-white/50 dark:bg-bg-elevated/30 border border-slate-200/50 dark:border-white/5 rounded-xl p-4 shadow-sm transition-all hover:bg-white/80 dark:hover:bg-bg-elevated/50">
-            <div className="text-[10px] font-bold uppercase tracking-widest text-slate-500 dark:text-text-muted">Rede</div>
+            <div className="text-[10px] font-bold uppercase tracking-widest text-slate-500 dark:text-text-muted">{t('summary.network')}</div>
             <div className="mt-2 text-sm font-semibold text-slate-900 dark:text-text-primary">WAN: {wizard.wanInterface ? `${wizard.wanInterface} • modo ${wizard.wanMode}` : 'opcional / desabilitada'}</div>
             <div className="mt-1 text-[13px] text-slate-600 dark:text-text-secondary">LAN/PXE: {wizard.mgmtInterface || 'sem interface'}</div>
             <div className="mt-1 text-[13px] text-slate-500 dark:text-text-muted">{networkSummary}</div>

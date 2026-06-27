@@ -97,13 +97,11 @@ export default function Welcome({ wizard, onChange }) {
     }));
   }, [availableCountries]);
 
-  const localeOptions = useMemo(() => {
-    return locales.map(locale => ({
-      id: locale,
-      label: parseLocaleLabel(locale),
-      desc: locale
-    }));
-  }, [locales]);
+  const localeOptions = [
+  { id: 'pt-BR', label: 'Português do Brasil', desc: 'pt-BR' },
+  { id: 'en-US', label: 'English (United States)', desc: 'en-US' },
+  { id: 'es-ES', label: 'Español', desc: 'es-ES' }
+];
 
   const keymapOptions = useMemo(() => {
     return keymaps.map(keymap => ({
@@ -137,8 +135,8 @@ export default function Welcome({ wizard, onChange }) {
     <div className="flex flex-col items-center justify-center h-full max-w-3xl mx-auto w-full px-4 text-center animate-fade-in-up pb-8 custom-scrollbar overflow-y-auto">
       {/* Branding */}
       <div className="mt-4 mb-10 flex flex-col items-center">
-        <div className="mb-8 p-5 bg-white/40 dark:bg-bg-elevated/20 border border-slate-200/50 dark:border-white/5 rounded-[2rem] shadow-sm backdrop-blur-2xl">
-          <EagleLogo className="w-16 h-16 text-accent-blue" />
+        <div className="mb-8 bg-transparent">
+          <EagleLogo className="w-40 h-40 md:w-48 md:h-48" />
         </div>
         <h2 className="text-4xl md:text-5xl font-bold tracking-tight text-slate-900 dark:text-white mb-4">
           {t('welcome.title')}
@@ -176,8 +174,8 @@ export default function Welcome({ wizard, onChange }) {
           <KxCombobox
             label={t('welcome.language').replace(/^[1-3]\.\s*/, '')}
             options={localeOptions}
-            value={wizard.locale}
-            onChange={(val) => onChange({ locale: val })}
+            value={wizard.uiLanguage}
+            onChange={(val) => onChange({ uiLanguage: val })}
             placeholder={loading ? t('welcome.loading') : t('welcome.language').replace(/^[1-3]\.\s*/, '')}
             disabled={loading}
           />
@@ -208,7 +206,7 @@ export default function Welcome({ wizard, onChange }) {
             </button>
           </div>
           {!selectedPreset && wizard.country && (
-            <div className="text-[11px] text-slate-500 mt-3 text-center">Sem sugestões padrão para o país selecionado.</div>
+            <div className="text-[11px] text-slate-500 mt-3 text-center">{t('welcome.noSuggestions') || "No default suggestions for the selected country."}</div>
           )}
         </div>
       </div>

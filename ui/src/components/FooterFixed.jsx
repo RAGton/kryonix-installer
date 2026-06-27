@@ -1,5 +1,6 @@
 import { useRef, useState } from 'react';
 
+import { useTranslation } from 'react-i18next';
 export default function FooterFixed({
   progressLabel,
   issues = [],
@@ -10,6 +11,7 @@ export default function FooterFixed({
   nextLabel = 'Próximo',
   hintText = 'Pronto para avançar. Navegação rápida: Alt + ← / Alt + →',
 }) {
+  const { t } = useTranslation();
   const lockRef    = useRef(false);
   const [busy, setBusy] = useState(false);
 
@@ -39,7 +41,7 @@ export default function FooterFixed({
         onClick={() => runLocked(onBack, canBack && !busy)}
         disabled={!canBack || busy}
       >
-        ← Voltar
+        {t('common.back')}
       </button>
 
       <span className="step-info">
@@ -53,7 +55,7 @@ export default function FooterFixed({
             className="kbd-legend"
             style={{ display: 'block', color: 'var(--text3)', fontSize: '10px', letterSpacing: '0.3px' }}
           >
-            Enter/Alt+N: Próximo · Alt+B: Voltar · Tab: Navegar · Espaço: Selecionar · F1: Ajuda · Esc: bloqueado
+            {t('nav.readyHint') || "Enter/Alt+N: Próximo · Alt+B: Voltar"}
           </span>
         )}
       </span>

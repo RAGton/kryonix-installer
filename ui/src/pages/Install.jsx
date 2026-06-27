@@ -165,7 +165,7 @@ export default function Install({ draft, uiState, validation, onChange }) {
           {installStarted && (
             <div className="flex gap-8 text-right">
               <div>
-                <div className="text-[10px] font-bold uppercase tracking-widest text-slate-500">Tempo Decorrido</div>
+                <div className="text-[10px] font-bold uppercase tracking-widest text-slate-500">{t('install.elapsed')}</div>
                 <div className="text-xl font-mono font-bold text-white mt-1">{formatTime(elapsed)}</div>
               </div>
               {!installSucceeded && !installFailed && (

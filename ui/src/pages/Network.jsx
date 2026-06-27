@@ -1,3 +1,4 @@
+import { useTranslation } from "react-i18next";
 import { useCallback, useEffect, useState } from 'react';
 import FieldError from '../components/FieldError.jsx';
 import { installerApi, getInstallerApiErrorMessage } from '../utils/installerApi.js';
@@ -70,6 +71,7 @@ function SummaryRow({ label, value, highlight }) {
 }
 
 export default function Network({ wizard, onChange, validation }) {
+  const { t } = useTranslation();
   const [interfaces, setInterfaces] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
