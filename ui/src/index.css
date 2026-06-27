@@ -2,24 +2,31 @@
 @tailwind components;
 @tailwind utilities;
 
-/* ── HUD Design System ─────────────────────────────────────────────────── */
+/* ── Blue Glass Design System ───────────────────────────────────────────── */
 
 :root {
-  --bg:       #0a0d12;
-  --bg2:      #0f1318;
-  --bg3:      #131820;
-  --bg4:      #181f28;
-  --border:   #1e2d3d;
-  --border2:  #253545;
-  --primary:  #00d4ff;
-  --secondary:#82aaff;
-  --accent:   #b48eff;
-  --text:     #cdd6f4;
-  --text2:    #7f8ea3;
-  --text3:    #45566a;
-  --success:  #a6e3a1;
-  --danger:   #f38ba8;
-  --warning:  #f9e2af;
+  --bg:       #05080f;
+  --bg2:      rgba(8, 14, 25, 0.66);
+  --bg3:      rgba(14, 24, 40, 0.62);
+  --bg4:      rgba(24, 38, 61, 0.78);
+  --surface:  rgba(9, 15, 28, 0.58);
+  --surface2: rgba(13, 24, 42, 0.72);
+  --border:   rgba(170, 202, 255, 0.16);
+  --border2:  rgba(180, 216, 255, 0.30);
+  --border1:  var(--border);
+  --primary:  #5ac8ff;
+  --primary2: #0a84ff;
+  --secondary:#c7ddff;
+  --accent:   #7dd3fc;
+  --text:     #f5f9ff;
+  --text2:    #c8d5e8;
+  --text3:    #8293ad;
+  --success:  #7ee7b2;
+  --danger:   #ff8ca3;
+  --warning:  #ffd98a;
+  --primary-low: rgba(90, 200, 255, 0.18);
+  --bg-card: var(--surface2);
+  --glass-shadow: 0 28px 90px rgba(1, 8, 20, 0.42);
   /* Paleta oficial do console/terminal do instalador (verde sobre preto).
      Deliberadamente distinta do HUD azul — referencie estes tokens em vez de
      hex soltos (bg-[var(--term-bg)]) para eliminar o branding drift. */
@@ -27,22 +34,23 @@
   --term-bg-soft: #050b06;
   --term-fg:      #9ef7bd;
   /* DiskVisualizer: barras de particionamento (tokenizadas, sem hex solto). */
-  --space-blue:    #1d3a5f;   /* espaço livre */
-  --disk-existing: #353d48;   /* partições já existentes (cinza) */
-  --r:        8px;
-  --rlg:      12px;
+  --space-blue:    #1e5b96;   /* espaço livre */
+  --disk-existing: #475263;   /* partições já existentes (cinza) */
+  --r:        16px;
+  --rlg:      28px;
   /* Tipografia: sans-serif para UI geral, monospace restrito a terminal/código. */
   --font:     -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Inter', Roboto, Oxygen, Ubuntu, Cantarell, 'Helvetica Neue', sans-serif;
   --font-mono:'JetBrains Mono', 'Fira Code', 'SF Mono', Consolas, 'Liberation Mono', Menlo, 'Courier New', monospace;
-  /* Contraste reforçado para --text2: antes #7f8ea3 (~3:1 sobre bg3), agora #a8b2c8 (~5:1) — passa WCAG AA. */
-  --text2:    #a8b2c8;
 }
 
 /* Unlayered = prioridade sobre @layer base do Tailwind */
 *, *::before, *::after { box-sizing: border-box; }
 
 body {
-  background: var(--bg);
+  background:
+    linear-gradient(126deg, rgba(39, 132, 255, 0.28) 0%, transparent 26%),
+    linear-gradient(214deg, rgba(90, 200, 255, 0.16) 0%, transparent 30%),
+    linear-gradient(145deg, #040712 0%, #07101e 42%, #06131c 100%);
   color: var(--text);
   font-family: var(--font);
   margin: 0;
@@ -59,8 +67,25 @@ body {
   height: 100vh;
   display: flex;
   flex-direction: column;
-  background: var(--bg);
+  position: relative;
+  isolation: isolate;
+  background:
+    linear-gradient(120deg, rgba(255, 255, 255, 0.04), transparent 34%),
+    linear-gradient(180deg, rgba(6, 19, 34, 0.35), rgba(2, 8, 16, 0.78));
   overflow: hidden;
+}
+
+.shell::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  pointer-events: none;
+  background-image:
+    linear-gradient(rgba(255, 255, 255, 0.035) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(255, 255, 255, 0.028) 1px, transparent 1px);
+  background-size: 42px 42px;
+  mask-image: linear-gradient(to bottom, transparent, black 18%, black 78%, transparent);
 }
 
 /* ── Header ────────────────────────────────────────────────────────────── */
@@ -68,19 +93,24 @@ body {
 .hdr {
   display: flex;
   align-items: center;
-  height: 52px;
-  padding: 0 20px;
+  position: relative;
+  z-index: 2;
+  height: 64px;
+  padding: 0 24px;
   gap: 16px;
   border-bottom: 1px solid var(--border);
-  background: var(--bg2);
+  background: rgba(5, 10, 20, 0.62);
+  box-shadow: 0 10px 40px rgba(0, 0, 0, 0.22);
+  backdrop-filter: blur(26px) saturate(150%);
+  -webkit-backdrop-filter: blur(26px) saturate(150%);
   flex-shrink: 0;
 }
 
 .hdr .logo {
-  font-size: 14px;
-  font-weight: 700;
+  font-size: 13px;
+  font-weight: 800;
   color: var(--primary);
-  letter-spacing: 0.1em;
+  letter-spacing: 0.08em;
   white-space: nowrap;
   flex-shrink: 0;
 }
@@ -105,52 +135,55 @@ body {
 .crumb {
   display: flex;
   align-items: center;
-  gap: 6px;
-  padding: 4px 10px;
-  border-radius: var(--r);
+  gap: 7px;
+  padding: 7px 12px;
+  border-radius: 999px;
   border: 1px solid transparent;
-  background: transparent;
+  background: rgba(255, 255, 255, 0.03);
   cursor: pointer;
   font-family: var(--font);
   font-size: 11px;
   color: var(--text3);
   white-space: nowrap;
-  transition: color 0.15s, border-color 0.15s, background 0.15s;
+  transition: color 0.18s ease, border-color 0.18s ease, background 0.18s ease, transform 0.18s ease;
 }
 .crumb:disabled { cursor: default; }
 
 .crumb.done            { color: var(--success); }
-.crumb.done:not(:disabled):hover { background: #a6e3a108; border-color: #a6e3a120; }
+.crumb.done:not(:disabled):hover { background: rgba(126, 231, 178, 0.10); border-color: rgba(126, 231, 178, 0.24); }
 
 .crumb.current {
   border-color: var(--primary);
-  color: var(--primary);
-  background: #00d4ff0d;
+  color: #eff9ff;
+  background: linear-gradient(135deg, rgba(90, 200, 255, 0.24), rgba(10, 132, 255, 0.15));
+  box-shadow: 0 0 0 1px rgba(90, 200, 255, 0.08), 0 12px 28px rgba(10, 132, 255, 0.16);
 }
 
 .crumb-num {
   display: flex;
   align-items: center;
   justify-content: center;
-  width: 18px;
-  height: 18px;
+  width: 20px;
+  height: 20px;
   border-radius: 50%;
-  background: var(--bg4);
+  background: rgba(255, 255, 255, 0.08);
   font-size: 10px;
   font-weight: 700;
   flex-shrink: 0;
 }
 .crumb.done    .crumb-num { background: transparent; font-size: 12px; }
-.crumb.current .crumb-num { background: var(--primary); color: var(--bg); }
+.crumb.current .crumb-num { background: #eff9ff; color: #063359; }
 
 /* ── Content — scrollável, espelha o original ─────────────────────────── */
 
 .content {
+  position: relative;
+  z-index: 1;
   flex: 1;
   min-height: 0;
   overflow-y: auto;
   overflow-x: hidden;
-  padding: 16px 20px;
+  padding: 24px;
   scrollbar-width: thin;
   scrollbar-color: var(--border2) transparent;
 }
@@ -160,26 +193,31 @@ body {
   display: flex;
   flex-direction: column;
   min-height: 100%;
-  background: var(--bg2);
+  background:
+    linear-gradient(145deg, rgba(255, 255, 255, 0.12), rgba(255, 255, 255, 0.035)),
+    var(--surface);
   border: 1px solid var(--border);
   border-radius: var(--rlg);
   overflow: hidden;
-  padding: 20px 24px;
+  padding: 24px 28px;
+  box-shadow: var(--glass-shadow);
+  backdrop-filter: blur(30px) saturate(160%);
+  -webkit-backdrop-filter: blur(30px) saturate(160%);
 }
 
 /* Título/subtítulo da página */
-.page-header { flex-shrink: 0; margin-bottom: 16px; }
+.page-header { flex-shrink: 0; margin-bottom: 20px; }
 
 .page-title {
-  font-size: 22px;
-  font-weight: 700;
+  font-size: 28px;
+  font-weight: 800;
   color: var(--text);
   margin: 0 0 4px;
-  letter-spacing: -0.01em;
+  letter-spacing: 0;
 }
 
 .page-subtitle {
-  font-size: 13px;
+  font-size: 14px;
   color: var(--text2);
   margin: 0;
   line-height: 1.6;
@@ -198,11 +236,17 @@ body {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  height: 56px;
-  padding: 0 20px;
+  position: relative;
+  z-index: 2;
+  min-height: 66px;
+  height: auto;
+  padding: 10px 24px;
   gap: 12px;
   border-top: 1px solid var(--border);
-  background: var(--bg2);
+  background: rgba(5, 10, 20, 0.66);
+  box-shadow: 0 -14px 44px rgba(0, 0, 0, 0.24);
+  backdrop-filter: blur(26px) saturate(150%);
+  -webkit-backdrop-filter: blur(26px) saturate(150%);
   flex-shrink: 0;
 }
 
@@ -217,24 +261,28 @@ body {
 /* ── Botões HUD — escopo .btn para não colidir com .btn-primary Tailwind ─ */
 
 .btn {
-  padding: 8px 20px;
-  border-radius: var(--r);
+  min-height: 40px;
+  padding: 9px 20px;
+  border-radius: 999px;
   border: 1px solid;
-  background: transparent;
+  background: rgba(255, 255, 255, 0.05);
   font-family: var(--font);
   font-size: 13px;
   cursor: pointer;
-  transition: background 0.15s, border-color 0.15s, color 0.15s;
+  transition: background 0.18s ease, border-color 0.18s ease, color 0.18s ease, transform 0.18s ease, box-shadow 0.18s ease;
   white-space: nowrap;
 }
 
 /* Apenas elementos que têm as DUAS classes (.btn e .btn-primary) */
 .btn.btn-primary {
   border-color: var(--primary);
-  color: var(--primary);
+  color: #04223d;
+  background: linear-gradient(135deg, #8fdcff, #2f9bff);
+  box-shadow: 0 14px 34px rgba(10, 132, 255, 0.28);
 }
 .btn.btn-primary:hover:not(:disabled) {
-  background: #00d4ff14;
+  transform: translateY(-1px);
+  box-shadow: 0 18px 42px rgba(10, 132, 255, 0.34);
 }
 
 .btn.btn-ghost {
@@ -244,6 +292,7 @@ body {
 .btn.btn-ghost:hover:not(:disabled) {
   border-color: var(--border2);
   color: var(--text);
+  background: rgba(255, 255, 255, 0.08);
 }
 
 .btn:disabled {
@@ -254,24 +303,27 @@ body {
 /* ── Cards ─────────────────────────────────────────────────────────────── */
 
 .card {
-  background: var(--bg3);
+  background: var(--surface2);
   border: 1px solid var(--border);
   border-radius: var(--rlg);
-  padding: 14px 16px;
+  padding: 16px 18px;
+  box-shadow: 0 18px 50px rgba(0, 0, 0, 0.18);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
 }
 .card.selected {
   border-color: var(--primary);
-  background: #091820;
+  background: rgba(17, 55, 92, 0.52);
 }
 
 /* ── Inputs sem classe explícita (não afeta .input-shell do Tailwind) ──── */
 
 input:not([class]),
 select:not([class]) {
-  background: var(--bg3);
+  background: rgba(4, 11, 22, 0.66);
   border: 1px solid var(--border);
-  border-radius: var(--r);
-  padding: 8px 12px;
+  border-radius: 14px;
+  padding: 10px 13px;
   color: var(--text);
   font-family: var(--font);
   font-size: 13px;
@@ -280,8 +332,8 @@ select:not([class]) {
   transition: border-color 0.15s;
 }
 input:not([class]):focus,
-select:not([class]):focus { border-color: var(--primary); }
-input.valid { border-color: #2a5a2a; }
+select:not([class]):focus { border-color: var(--primary); box-shadow: 0 0 0 4px rgba(90, 200, 255, 0.12); }
+input.valid { border-color: rgba(126, 231, 178, 0.70); }
 input.error { border-color: var(--danger); }
 
 /* ── Acessibilidade: foco por teclado sempre visível (Gate 6 — keyboard-only) ── */
@@ -344,9 +396,9 @@ textarea:focus-visible {
 }
 
 .hw-card {
-  background: var(--bg3);
+  background: rgba(255, 255, 255, 0.045);
   border: 1px solid var(--border);
-  border-radius: var(--r);
+  border-radius: 18px;
   padding: 10px 12px;
   box-sizing: border-box;
 }
@@ -381,8 +433,8 @@ textarea:focus-visible {
   align-items: center;
   gap: 8px;
   padding: 6px 10px;
-  background: var(--bg3);
-  border-radius: 6px;
+  background: rgba(255, 255, 255, 0.045);
+  border-radius: 14px;
   border: 1px solid var(--border);
   box-sizing: border-box;
 }
@@ -409,6 +461,7 @@ textarea:focus-visible {
   border-radius: 50%;
   background: var(--primary);
   flex-shrink: 0;
+  box-shadow: 0 0 22px rgba(90, 200, 255, 0.72);
   animation: pulse 1.2s infinite;
 }
 
@@ -455,16 +508,16 @@ textarea:focus-visible {
 
 /* Card de disco */
 .disk-card {
-  background: var(--bg3);
+  background: rgba(255, 255, 255, 0.045);
   border: 1px solid var(--border);
   border-radius: var(--rlg);
   padding: 14px 16px;
   cursor: pointer;
-  transition: border-color 0.15s, background 0.15s;
+  transition: border-color 0.18s ease, background 0.18s ease, transform 0.18s ease;
 }
 
-.disk-card:hover       { border-color: var(--border2); }
-.disk-card.selected    { border-color: var(--primary); background: #091820; }
+.disk-card:hover       { border-color: var(--border2); transform: translateY(-1px); }
+.disk-card.selected    { border-color: var(--primary); background: rgba(17, 55, 92, 0.52); }
 
 .disk-card-header {
   display: flex;
@@ -482,9 +535,9 @@ textarea:focus-visible {
 .disk-size {
   font-size: 11px;
   color: var(--text2);
-  background: var(--bg4);
+  background: rgba(255, 255, 255, 0.07);
   border: 1px solid var(--border);
-  border-radius: 4px;
+  border-radius: 999px;
   padding: 2px 7px;
 }
 
@@ -492,7 +545,7 @@ textarea:focus-visible {
 .partition-bar {
   display: flex;
   height: 18px;
-  border-radius: 4px;
+  border-radius: 999px;
   overflow: hidden;
   background: var(--bg4);
   border: 1px solid var(--border);
@@ -584,28 +637,29 @@ textarea:focus-visible {
 
 @layer components {
   .glass-panel {
-    @apply rounded-[28px] border border-white/10 bg-slate-950/45 shadow-glass backdrop-blur-2xl;
+    @apply rounded-[28px] border border-white/15 bg-white/10 shadow-glass backdrop-blur-2xl;
   }
 
   .section-panel {
-    @apply rounded-2xl border border-white/10 bg-black/30 p-5 backdrop-blur-xl;
+    @apply rounded-[28px] border border-white/15 bg-white/10 p-5 shadow-glass backdrop-blur-2xl;
   }
 
   /* btn-primary Tailwind permanece intacto para as páginas internas */
   .btn-primary {
-    @apply px-6 py-3 rounded-lg font-bold transition-all focus:ring-2 focus:ring-accent-400/60 bg-accent-600 text-white hover:bg-accent-500 disabled:cursor-not-allowed disabled:bg-slate-700 disabled:text-slate-400 disabled:opacity-80;
+    @apply rounded-full px-6 py-3 font-bold text-slate-950 shadow-lg shadow-blue-500/20 transition-all focus:ring-2 focus:ring-accent-400/60 disabled:cursor-not-allowed disabled:bg-slate-700 disabled:text-slate-400 disabled:opacity-80;
+    background: linear-gradient(135deg, #93ddff, #2f9bff);
   }
 
   .btn-secondary {
-    @apply px-6 py-3 rounded-lg font-bold transition-all focus:ring-2 focus:ring-white/30 bg-white/10 text-white hover:bg-white/15 disabled:cursor-not-allowed disabled:bg-white/5 disabled:text-slate-500 disabled:opacity-80;
+    @apply rounded-full border border-white/15 bg-white/10 px-6 py-3 font-bold text-white transition-all hover:bg-white/15 focus:ring-2 focus:ring-white/30 disabled:cursor-not-allowed disabled:bg-white/5 disabled:text-slate-500 disabled:opacity-80;
   }
 
   .btn-ghost {
-    @apply px-6 py-3 rounded-lg font-bold transition-all focus:ring-2 focus:ring-white/20 bg-transparent text-slate-200 hover:bg-white/10 disabled:cursor-not-allowed disabled:text-slate-500;
+    @apply rounded-full px-6 py-3 font-bold text-slate-200 transition-all hover:bg-white/10 focus:ring-2 focus:ring-white/20 disabled:cursor-not-allowed disabled:text-slate-500;
   }
 
   .input-shell {
-    @apply w-full rounded-xl border border-white/10 bg-slate-950/80 px-4 py-3 text-sm text-white outline-none transition focus:border-accent-400 focus:ring-2 focus:ring-accent-400/20;
+    @apply w-full rounded-2xl border border-white/15 bg-slate-950/55 px-4 py-3 text-sm text-white outline-none transition focus:border-accent-400 focus:ring-2 focus:ring-accent-400/20;
   }
 
   .label-text {
@@ -617,7 +671,7 @@ textarea:focus-visible {
   }
 
   .metric-chip {
-    @apply inline-flex items-center gap-2 rounded-full border border-white/10 bg-white/5 px-3 py-1 text-xs font-semibold text-slate-200;
+    @apply inline-flex items-center gap-2 rounded-full border border-sky-200/20 bg-sky-100/10 px-3 py-1 text-xs font-semibold text-sky-100;
   }
 }
 
@@ -628,7 +682,7 @@ textarea:focus-visible {
 }
 
 .manual-table-wrapper {
-  background: rgba(0, 0, 0, 0.2);
+  background: rgba(255, 255, 255, 0.045);
   border: 1px solid var(--border1);
   border-radius: 12px;
   overflow: hidden;
@@ -643,7 +697,7 @@ textarea:focus-visible {
 .manual-table th {
   text-align: left;
   padding: 12px 16px;
-  background: rgba(255, 255, 255, 0.05);
+  background: rgba(255, 255, 255, 0.07);
   color: var(--text3);
   font-weight: 600;
   text-transform: uppercase;
@@ -676,7 +730,7 @@ textarea:focus-visible {
   color: var(--text3);
   width: 28px;
   height: 28px;
-  border-radius: 6px;
+  border-radius: 999px;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -701,8 +755,8 @@ textarea:focus-visible {
   left: 0;
   right: 0;
   bottom: 0;
-  background: rgba(0, 0, 0, 0.8);
-  backdrop-filter: blur(8px);
+  background: rgba(2, 8, 16, 0.72);
+  backdrop-filter: blur(18px) saturate(140%);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -770,18 +824,18 @@ textarea:focus-visible {
 /* --- Installation Terminal --- */
 .terminal-container {
   height: 100%;
-  background: var(--bg2);
+  background: rgba(1, 7, 16, 0.82);
   border: 1px solid var(--border1);
-  border-radius: 16px;
+  border-radius: 24px;
   display: flex;
-  flex-col: column;
+  flex-direction: column;
   overflow: hidden;
   box-shadow: inset 0 0 40px rgba(0, 0, 0, 0.5);
 }
 
 .terminal-header {
   padding: 12px 20px;
-  background: rgba(0, 0, 0, 0.3);
+  background: rgba(255, 255, 255, 0.04);
   border-bottom: 1px solid var(--border1);
   display: flex;
   align-items: center;
@@ -803,7 +857,7 @@ textarea:focus-visible {
   font-family: 'JetBrains Mono', 'Fira Code', monospace;
   font-size: 13px;
   line-height: 1.6;
-  color: #00d4ff;
+  color: var(--term-fg);
   scroll-behavior: smooth;
 }
 
@@ -833,7 +887,7 @@ textarea:focus-visible {
 
 .progress-bar-fill {
   height: 100%;
-  background: linear-gradient(90deg, var(--primary), #00ffcc);
+  background: linear-gradient(90deg, var(--primary2), var(--primary), #80ffe1);
   box-shadow: 0 0 10px var(--primary);
   transition: width 0.3s ease-out;
 }
@@ -877,7 +931,7 @@ textarea:focus-visible {
   cursor: pointer;
   padding: 12px;
   background: rgba(0, 0, 0, 0.2);
-  border-radius: 8px;
+  border-radius: 16px;
   border: 1px solid transparent;
   transition: all 0.2s;
 }
@@ -894,4 +948,69 @@ textarea:focus-visible {
 .danger-checkbox span {
   font-size: 13px;
   color: var(--text2);
+}
+
+@media (max-width: 900px) {
+  .hdr {
+    height: auto;
+    min-height: 64px;
+    align-items: flex-start;
+    flex-direction: column;
+    padding: 12px 16px;
+  }
+
+  .breadcrumb {
+    width: 100%;
+  }
+
+  .content {
+    padding: 14px;
+  }
+
+  .page-shell {
+    border-radius: 22px;
+    padding: 18px;
+  }
+
+  .page-title {
+    font-size: 22px;
+  }
+
+  .split,
+  .hw-grid,
+  .form-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .left {
+    border-right: 0;
+    border-bottom: 1px solid var(--border);
+  }
+
+  .ftr {
+    align-items: stretch;
+    flex-wrap: wrap;
+    padding: 10px 14px;
+  }
+
+  .step-info {
+    order: -1;
+    flex-basis: 100%;
+  }
+
+  .ftr .btn {
+    flex: 1;
+    min-width: 128px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.001ms !important;
+    animation-iteration-count: 1 !important;
+    scroll-behavior: auto !important;
+    transition-duration: 0.001ms !important;
+  }
 }
