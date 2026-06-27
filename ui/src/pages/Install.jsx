@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import ErrorDiagnosisPanel from '../components/ErrorDiagnosisPanel.jsx';
 import AdvancedLogsDrawer from '../components/AdvancedLogsDrawer.jsx';
 import { useInstallExecution } from '../hooks/useInstallExecution.js';
@@ -9,6 +10,7 @@ import {
 } from '../utils/installExecution.js';
 
 export default function Install({ draft, uiState, validation, onChange }) {
+  const { t } = useTranslation();
   const logRef = useRef(null);
   const stickToBottomRef = useRef(true);
   const [rebootBusy, setRebootBusy] = useState(false);

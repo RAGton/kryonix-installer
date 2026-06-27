@@ -1,4 +1,5 @@
 import { useMemo, useState, useCallback } from 'react';
+import { useTranslation } from 'react-i18next';
 import { isStrongPassword, buildInstallPlanPayload } from '../utils/installPlan.js';
 import { FEATURE_CATALOG } from '../data/featureCatalog.js';
 import { getProfileById } from '../data/profileCatalog.js';
@@ -18,6 +19,7 @@ function formatSourceKind(value) {
 }
 
 export default function Summary({ wizard, uiState, onChange, validation }) {
+  const { t } = useTranslation();
   const sshCount = String(wizard.adminAuthorizedKeys || '')
     .split('\n')
     .map((item) => item.trim())
