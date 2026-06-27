@@ -5,6 +5,7 @@ mod executor;
 mod network;
 use network::apply_network;
 mod profiles;
+mod source;
 
 use axum::{
     Json, Router,
@@ -316,6 +317,7 @@ async fn main() {
         .route("/repos", get(auth::list_repos))
         .route("/clone", post(auth::clone_repo))
         // Install orchestration
+        .route("/api/source/github/prepare", post(source::prepare_github_source))
         .route("/plan", post(plan))
         .route("/dry-run", post(dry_run))
         .route("/install", post(install))

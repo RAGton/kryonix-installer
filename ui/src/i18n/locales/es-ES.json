@@ -186,5 +186,23 @@
       "allowWeakTitle": "Permitir contraseña débil / modo laboratorio",
       "allowWeakDesc": "No recomendado para uso real. Usar solo en VM, laboratorio o pruebas rápidas. La contraseña vacía sigue bloqueada; la confirmación aún debe coincidir."
     }
-  }
+  },
+  "source.title": "Origen del Sistema",
+  "source.description": "Elige cómo se debe instalar el sistema base.",
+  "source.active": "Activo",
+  "source.offline.title": "Offline defaults",
+  "source.offline.description": "Instala el sistema base contenido en la ISO sin necesidad de internet para paquetes esenciales.",
+  "source.github.title": "GitHub KryonixOS",
+  "source.github.description": "Clona las configuraciones oficiales de KryonixOS desde GitHub.",
+  "source.github.status_label": "Estado",
+  "source.github.status.idle": "Esperando",
+  "source.github.status.checking": "Comprobando...",
+  "source.github.status.cloning": "Clonando...",
+  "source.github.status.validating": "Validando flake...",
+  "source.github.status.ready": "Listo",
+  "source.github.status.failed": "Falló",
+  "source.github.error.unknown": "Ocurrió un error desconocido.",
+  "source.github.error.failed_connect": "Fallo de conexión con el servidor local.",
+  "source.github.button.use_online": "Usar fuente online",
+  "source.github.button.recheck": "Volver a comprobar"
 }

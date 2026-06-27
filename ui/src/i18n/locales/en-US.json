@@ -186,5 +186,23 @@
       "allowWeakTitle": "Allow weak password / lab mode",
       "allowWeakDesc": "Not recommended for actual use. Only use in VM, lab, or quick testing. Empty password remains blocked; confirmation still needs to match."
     }
-  }
+  },
+  "source.title": "System Source",
+  "source.description": "Choose how the base system should be installed.",
+  "source.active": "Active",
+  "source.offline.title": "Offline defaults",
+  "source.offline.description": "Installs the base system contained in the ISO without needing internet for essential packages.",
+  "source.github.title": "GitHub KryonixOS",
+  "source.github.description": "Clones the official KryonixOS configurations from GitHub.",
+  "source.github.status_label": "Status",
+  "source.github.status.idle": "Waiting",
+  "source.github.status.checking": "Checking...",
+  "source.github.status.cloning": "Cloning...",
+  "source.github.status.validating": "Validating flake...",
+  "source.github.status.ready": "Ready",
+  "source.github.status.failed": "Failed",
+  "source.github.error.unknown": "An unknown error occurred.",
+  "source.github.error.failed_connect": "Connection failure with local server.",
+  "source.github.button.use_online": "Use online source",
+  "source.github.button.recheck": "Recheck"
 }

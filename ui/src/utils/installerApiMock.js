@@ -33,6 +33,22 @@ export const installerApiMock = {
     });
   },
 
+  prepareGithubSource(repo, branch = 'main') {
+    return new Promise(resolve => setTimeout(() => {
+      resolve({
+        ok: true,
+        source: {
+          kind: 'github',
+          repo,
+          branch,
+          clone_path: '/run/kryonix-installer/sources/kryonixos',
+          target_path: '/etc/kryonixos',
+          validated: true,
+        }
+      });
+    }, 2000));
+  },
+
   getDisks() {
     return Promise.resolve([
       {

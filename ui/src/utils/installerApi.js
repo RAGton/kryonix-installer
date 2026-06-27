@@ -158,6 +158,14 @@ const realInstallerApi = {
     return requestJson('/hardware');
   },
 
+  prepareGithubSource(repo, branch = 'main') {
+    return requestJson('/api/source/github/prepare', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ repo, branch }),
+    });
+  },
+
   getDisks() {
     return requestJson('/api/disks').then(disks => disks.map(d => ({
       name: d.name,

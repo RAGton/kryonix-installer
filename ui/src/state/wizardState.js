@@ -71,6 +71,8 @@ export const UI_TRANSIENT_FIELD_NAMES = [
   'storageWarnings',
   'destructiveConfirmed',
   'installRunning',
+  'githubSourceStatus',
+  'githubSourceError',
 ];
 
 const DRAFT_FIELD_SET = new Set(DRAFT_FIELD_NAMES);
@@ -156,6 +158,8 @@ export const INITIAL_UI_TRANSIENT_STATE = {
   storageWarnings: [],
   destructiveConfirmed: false,
   installRunning: false,
+  githubSourceStatus: 'idle',
+  githubSourceError: '',
 };
 
 function pickFields(source, defaults, allowedFields) {
