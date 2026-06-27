@@ -60,29 +60,11 @@ function formatIpv4Input(nextValue, previousValue = '') {
   return formatted;
 }
 
-function HelpBlock() {
+function SummaryRow({ label, value, highlight }) {
   return (
-    <div className="rounded-2xl border border-cyan-400/20 bg-cyan-400/10 p-4 text-sm text-cyan-50">
-      <div className="text-xs font-semibold uppercase tracking-[0.22em] text-cyan-200">Ajuda tecnica</div>
-      <div className="mt-3 space-y-3 text-cyan-100">
-        <p><b className="text-white">IP do servidor</b>: endereco IPv4 fixo do Kryonix na interface LAN/PXE. E esse IP que o backend grava em `network.serverIp`.</p>
-        <p><b className="text-white">Gateway</b>: rota padrao usada pelo servidor. Se nao houver WAN dedicada, o gateway continua sendo o da LAN configurada.</p>
-        <p><b className="text-white">DNS</b>: lista de resolvedores IPv4. Valores errados quebram update, fetch do repositorio e resolucao de nomes depois da instalacao.</p>
-        <p><b className="text-white">Interface</b>: nome da placa detectada pelo backend. O preenchimento automatico so sugere a primeira interface valida para LAN/PXE; IP, gateway, DNS e porta HTTP continuam revisados manualmente.</p>
-        <p><b className="text-white">WAN opcional</b>: use apenas quando existir uma segunda interface dedicada para uplink, NAT ou PPPoE. Deixar vazio nao desabilita a instalacao.</p>
-        <p><b className="text-white">Consequencias de erro</b>: interface trocada, gateway incorreto ou DNS invalido podem deixar o servidor sem acesso remoto, sem internet ou sem entregar PXE corretamente.</p>
-        <p><b className="text-white">Exemplo simples</b>: `enp1s0` -&gt; `192.168.100.2/24`, gateway `192.168.100.1`, DNS `1.1.1.1,8.8.8.8`, sem WAN dedicada.</p>
-        <p><b className="text-white">Exemplo laboratorio</b>: `enp1s0` -&gt; LAN/PXE `192.168.100.2/24`; `enp2s0` -&gt; WAN por DHCP ou PPPoE quando o servidor tambem faz saida para a internet.</p>
-      </div>
-    </div>
-  );
-}
-
-function SummaryRow({ label, value }) {
-  return (
-    <div className="flex items-center justify-between gap-3 rounded-xl border border-white/10 bg-white/[0.03] px-3 py-2 text-sm text-slate-300">
-      <span className="text-slate-400">{label}</span>
-      <span className="font-semibold text-white">{value}</span>
+    <div className="flex items-center justify-between py-2 border-b border-white/5 last:border-0">
+      <span className="text-xs font-medium text-slate-500 dark:text-slate-400">{label}</span>
+      <span className={`text-sm font-bold ${highlight ? 'text-accent-blue' : 'text-slate-900 dark:text-slate-200'}`}>{value}</span>
     </div>
   );
 }
@@ -91,12 +73,9 @@ export default function Network({ wizard, onChange, validation }) {
   const [interfaces, setInterfaces] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
-  const [showHelp, setShowHelp] = useState(false);
-  const [showPppoePassword, setShowPppoePassword] = useState(false);
   const [showWanAdvanced, setShowWanAdvanced] = useState(false);
 
-  // Conectividade (Wi-Fi + status). 
-  // SECURITY: Senha só em estado local — nunca persistida no wizardState/localStorage.
+  // Connectivity
   const [netStatus, setNetStatus] = useState(null);
   const [wifiList, setWifiList] = useState([]);
   const [wifiScanning, setWifiScanning] = useState(false);
@@ -109,28 +88,32 @@ export default function Network({ wizard, onChange, validation }) {
 
   const fieldErrors = validation?.fieldErrors || {};
   const warnings = validation?.warnings || [];
-  
+
   const ifaceNames = interfaces.map((i) => i.name).filter(Boolean);
   const ethIfaces = interfaces.filter((i) => i.type === 'ethernet');
   const wifiIfaces = interfaces.filter((i) => i.type === 'wifi');
-  const otherIfaces = interfaces.filter((i) => i.type !== 'ethernet' && i.type !== 'wifi');
-  
+
   const hasWifi = wifiIfaces.length > 0;
   const wanEnabled = Boolean(wizard.wanInterface);
   const sameNicSelected = wizard.mgmtInterface && wizard.wanInterface && wizard.mgmtInterface === wizard.wanInterface;
 
-  // netApplyBusy: bloqueia edição enquanto o backend aplica /network/apply.
-  // Antes era write-only no App.jsx — agora a UI reage para impedir que o
-  // usuário troque interface/IP/modo durante uma aplicação em andamento.
   const netApplyBusy = Boolean(wizard.netApplyBusy);
 
+  const dnsParts = (wizard.mgmtDns || '').split(',').map(s => s.trim());
+  const dns1 = dnsParts[0] || '';
+  const dns2 = dnsParts[1] || '';
+
+  const setDns = (d1, d2) => {
+    const arr = [d1, d2].filter(Boolean);
+    onChange({ mgmtDns: arr.join(',') });
+  };
+
   const refreshStatus = useCallback(async () => {
-    try { 
+    try {
       const status = await installerApi.getNetworkStatus();
       setNetStatus(status);
       if (status.connected) {
         onChange({ netConnected: true, netOffline: false });
-        // Propagar IP detectado via DHCP para wizard.serverIp
         if (status.ip && isUsableRemoteIp(status.ip)) {
           onChange({ serverIp: sanitizeIp(status.ip) });
         }
@@ -147,7 +130,7 @@ export default function Network({ wizard, onChange, validation }) {
       const payload = await installerApi.getNetworkInterfaces();
       const list = Array.isArray(payload?.interfaces) ? payload.interfaces : [];
       setInterfaces(list);
-      
+
       const wifi = list.find(i => i.type === 'wifi');
       if (wifi && !selectedWifiIface) {
         setSelectedWifiIface(wifi.name);
@@ -199,10 +182,7 @@ export default function Network({ wizard, onChange, validation }) {
     try {
       const result = await installerApi.connectWifi(selectedWifiIface, wifiSsid, wifiPassword);
       setConnectMsg(result?.message || 'Conectado.');
-      
-      // SECURITY: limpa a senha da memória local após a tentativa
-      setWifiPassword(''); 
-      
+      setWifiPassword('');
       await refreshStatus();
     } catch (nextError) {
       setConnectMsg(getInstallerApiErrorMessage(nextError, 'Falha ao conectar.'));
@@ -212,7 +192,6 @@ export default function Network({ wizard, onChange, validation }) {
   }, [selectedWifiIface, wifiSsid, wifiPassword, refreshStatus]);
 
   const continueOffline = () => {
-    // SECURITY: Limpa qualquer dado sensível local
     setWifiSsid('');
     setWifiPassword('');
     onChange({ netOffline: true, netConnected: false });
@@ -269,7 +248,6 @@ export default function Network({ wizard, onChange, validation }) {
           onChange({ netApplyError: 'O backend não aplicou a configuração de rede (/network/apply).', netApplyBusy: false });
         }
       }
-      // Status Live must be updated
       await refreshStatus();
     } catch (err) {
       if (err instanceof TypeError && err.message.toLowerCase().includes('fetch')) {
@@ -301,189 +279,65 @@ export default function Network({ wizard, onChange, validation }) {
       });
       return;
     }
-
     onChange({
       wanInterface: nextValue,
       wanIdentified: false,
     });
   }
 
+  const isDhcp = wizard.mgmtMode === 'dhcp';
+
   return (
-    <div className="grid h-full min-h-0 gap-4 lg:grid-cols-[1.08fr_0.92fr]">
-      <section className="section-panel min-h-0 overflow-y-auto p-4">
-        <div className="mb-4 flex items-start justify-between gap-4">
-          <div>
-            <h3 className="text-xl font-bold text-white">Conectividade e Redes</h3>
-            <p className="mt-1 text-sm text-slate-400">Configure o acesso à internet para o instalador e os parâmetros de rede do servidor.</p>
-          </div>
-          <button type="button" className="btn-secondary !px-3 !py-2" onClick={() => setShowHelp((previous) => !previous)}>
-            {showHelp ? 'Ocultar ajuda' : 'Ajuda técnica'}
+    <div className="grid h-full min-h-0 gap-6 lg:grid-cols-[7fr_3fr] animate-fade-in-up">
+
+      {/* ── ÁREA PRINCIPAL (CONFIGURAÇÃO - 70%) ────────────────────────── */}
+      <section className="flex flex-col min-h-0 overflow-y-auto pr-2 pb-12">
+        <div className="mb-8">
+          <h2 className="text-3xl font-bold tracking-tight text-slate-900 dark:text-text-primary">Topologia de Rede</h2>
+          <p className="mt-2 text-base text-slate-500 dark:text-text-secondary font-medium">
+            Configure a infraestrutura de rede para o servidor Kryonix.
+          </p>
+        </div>
+
+        {/* Toggle Mode */}
+        <div className="mb-6 inline-flex bg-slate-200/50 dark:bg-bg-surface/50 p-1.5 rounded-xl border border-slate-200/50 dark:border-white/5 shadow-inner">
+          <button
+            type="button"
+            onClick={() => onChange({ mgmtMode: 'dhcp' })}
+            disabled={netApplyBusy}
+            className={`px-8 py-2.5 rounded-lg text-sm font-bold transition-all duration-300 ${
+              isDhcp
+                ? 'bg-white dark:bg-bg-elevated text-accent-blue shadow-panel ring-1 ring-slate-200 dark:ring-white/10'
+                : 'text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-200'
+            }`}
+          >
+            Atribuição Automática (DHCP)
+          </button>
+          <button
+            type="button"
+            onClick={() => onChange({ mgmtMode: 'static' })}
+            disabled={netApplyBusy}
+            className={`px-8 py-2.5 rounded-lg text-sm font-bold transition-all duration-300 ${
+              !isDhcp
+                ? 'bg-white dark:bg-bg-elevated text-accent-blue shadow-panel ring-1 ring-slate-200 dark:ring-white/10'
+                : 'text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-200'
+            }`}
+          >
+            Configuração Manual
           </button>
         </div>
 
-        {showHelp ? <HelpBlock /> : null}
+        {/* Main Form */}
+        <div className="bg-white/50 dark:bg-bg-elevated/30 border border-slate-200/50 dark:border-white/5 rounded-2xl p-6 shadow-sm">
+          <div className="grid gap-6">
 
-        {/* ── Conectividade Live ─────────────────────────────────────────── */}
-        <div className="rounded-2xl border border-white/10 bg-white/[0.03] p-4 mt-4">
-          <div className="flex items-center justify-between gap-3">
-            <div className="text-xs font-semibold uppercase tracking-[0.22em] text-slate-400">Status do Instalador</div>
-            <div className="flex gap-2">
-               <button
-                 type="button"
-                 className="btn-secondary !px-2 !py-1 text-xs"
-                 onClick={loadInterfaces}
-                 disabled={loading}
-                 aria-busy={loading}
-                 aria-label={loading ? 'Atualizando interfaces' : 'Atualizar lista de interfaces'}
-               >
-                 <span className={loading ? 'inline-block animate-spin' : 'inline-block'}>↻</span>
-                 <span className="ml-1">{loading ? 'Atualizando…' : 'Atualizar'}</span>
-               </button>
-               <span className={`metric-chip ${wizard.netConnected ? 'text-emerald-300' : wizard.netOffline ? 'text-amber-300' : 'text-slate-400'}`}>
-                {wizard.netConnected
-                  ? `Online${netStatus?.ssid ? ` · ${netStatus.ssid}` : ''}`
-                  : wizard.netOffline ? 'Modo Offline' : 'Desconectado'}
-              </span>
-            </div>
-          </div>
-
-          {/* Listagem de Interfaces Ethernet */}
-          <div className="mt-4">
-            <div className="text-sm font-semibold text-white mb-2">Interfaces Ethernet</div>
-            <div className="grid gap-2 sm:grid-cols-2">
-              {ethIfaces.length === 0 ? (
-                <div className="text-xs text-slate-500 italic">Nenhuma interface Ethernet detectada.</div>
-              ) : (
-                ethIfaces.map((it) => (
-                  <div key={it.name} className="flex items-center justify-between rounded-xl border border-white/10 bg-slate-950/60 px-3 py-2 text-sm">
-                    <span className="text-white">󰈀 {it.name}</span>
-                    <span className={it.state === 'connected' ? 'text-emerald-300' : 'text-slate-400'}>{it.state}</span>
-                  </div>
-                ))
-              )}
-            </div>
-          </div>
-
-          {/* Gestão de Wi-Fi */}
-          <div className="mt-6">
-            <div className="flex items-center justify-between gap-3 mb-2">
-              <div className="text-sm font-semibold text-white">Redes Wi-Fi</div>
-              {hasWifi && (
-                <div className="flex gap-2">
-                  <select 
-                    className="bg-slate-900 border border-white/10 text-xs rounded px-2 py-1 text-slate-300"
-                    value={selectedWifiIface}
-                    onChange={(e) => setSelectedWifiIface(e.target.value)}
-                  >
-                    {wifiIfaces.map(i => <option key={i.name} value={i.name}>{i.name}</option>)}
-                  </select>
-                  <button type="button" className="btn-secondary !px-3 !py-1 text-xs" onClick={scanWifi} disabled={wifiScanning || !selectedWifiIface}>
-                    {wifiScanning ? 'Buscando…' : 'Buscar redes'}
-                  </button>
-                </div>
-              )}
-            </div>
-
-            {!hasWifi ? (
-              <div className="rounded-xl border border-white/10 bg-slate-950/60 px-3 py-3 text-sm text-slate-400">
-                󰖪 Nenhuma interface Wi-Fi detectada neste hardware.
-              </div>
-            ) : (
-              <div className="space-y-3">
-                {wifiList.length > 0 ? (
-                  <>
-                    <div>
-                      <label className="label-text" htmlFor="wifiSsid">Rede Disponível</label>
-                      <select id="wifiSsid" className="input-shell" value={wifiSsid} onChange={(e) => setWifiSsid(e.target.value)}>
-                        <option value="">Selecione uma rede</option>
-                        {wifiList.map((w) => (
-                          <option key={w.ssid} value={w.ssid}>
-                            {w.ssid} — {w.signal}% {w.security ? `(${w.security})` : '(Aberta)'}
-                          </option>
-                        ))}
-                      </select>
-                    </div>
-                    <div>
-                      <label className="label-text" htmlFor="wifiPassword">Senha</label>
-                      <div className="flex gap-2">
-                        <input
-                          id="wifiPassword"
-                          type={showWifiPassword ? 'text' : 'password'}
-                          className="input-shell flex-1"
-                          value={wifiPassword}
-                          autoComplete="off"
-                          onChange={(e) => setWifiPassword(e.target.value)}
-                          placeholder="Vazio para redes abertas"
-                        />
-                        <button type="button" className="btn-secondary !px-3 !py-2" onClick={() => setShowWifiPassword((p) => !p)}>
-                          {showWifiPassword ? '󰈈' : '󰈉'}
-                        </button>
-                        <button type="button" className="btn-primary !px-4 !py-2" onClick={connectWifi} disabled={!wifiSsid || connecting}>
-                          {connecting ? '...' : 'Conectar'}
-                        </button>
-                      </div>
-                    </div>
-                  </>
-                ) : (
-                  <div className="text-xs text-slate-500 italic">Clique em "Buscar redes" para listar sinais Wi-Fi.</div>
-                )}
-              </div>
-            )}
-          </div>
-
-          {connectMsg ? <div className="mt-3 p-2 rounded bg-cyan-950/30 text-xs text-cyan-200 border border-cyan-400/20">{connectMsg}</div> : null}
-
-          <div className="mt-6 pt-4 border-t border-white/5 flex items-center justify-between">
-            <button type="button" className={`btn-secondary !px-4 !py-2 ${wizard.netOffline ? 'ring-2 ring-amber-400/50 bg-amber-400/10' : ''}`} onClick={continueOffline}>
-              Continuar offline
-            </button>
-            {wizard.netOffline && (
-              <span className="text-[10px] text-amber-300 font-medium uppercase tracking-wider">
-                󱧥 Avanço offline liberado
-              </span>
-            )}
-          </div>
-          
-          {wizard.netOffline && (
-            <div className="mt-3 p-3 rounded-xl bg-amber-400/5 border border-amber-400/20 text-xs text-amber-100/80 leading-relaxed">
-              <span className="font-bold text-amber-200">Aviso:</span> Modo offline ativado. A instalação dependerá exclusivamente do conteúdo presente na ISO ou em caches locais. Downloads de repositórios externos não serão realizados.
-            </div>
-          )}
-        </div>
-
-        {/* ── Configurações do Target ─────────────────────────────────────── */}
-        <div className="mt-8 space-y-4">
-          <div className="rounded-2xl border border-white/10 bg-white/[0.03] p-4">
-            <div className="text-xs font-semibold uppercase tracking-[0.22em] text-slate-400">Servidor / LAN-PXE (Target)</div>
-
-            {/* Modo de endereçamento IPv4 da interface LAN/PXE: DHCP (automático)
-                ou manual (IP estático). Em DHCP os campos de IP/máscara/gateway/DNS
-                são obtidos automaticamente e não são exigidos. */}
-            <div className="mt-3 grid gap-2 sm:grid-cols-2">
-              <button
-                type="button"
-                className={wizard.mgmtMode === 'dhcp' ? 'btn-primary' : 'btn-secondary'}
-                onClick={() => onChange({ mgmtMode: 'dhcp' })}
-                disabled={netApplyBusy}
-              >
-                DHCP (IP automático)
-              </button>
-              <button
-                type="button"
-                className={wizard.mgmtMode === 'static' ? 'btn-primary' : 'btn-secondary'}
-                onClick={() => onChange({ mgmtMode: 'static' })}
-                disabled={netApplyBusy}
-              >
-                Manual (IP estático)
-              </button>
-            </div>
-
-            <div className="mt-3 grid gap-4 sm:grid-cols-2">
+            {/* Linha 1: Interface & Porta */}
+            <div className="grid gap-6 sm:grid-cols-2">
               <div>
-                <label className="label-text" htmlFor="mgmtInterface">Interface LAN/PXE</label>
+                <label className="block text-sm font-bold text-slate-900 dark:text-slate-200 mb-2" htmlFor="mgmtInterface">Interface de Rede (LAN/PXE)</label>
                 <select
                   id="mgmtInterface"
-                  className="input-shell"
+                  className="w-full bg-white dark:bg-bg-surface border border-slate-300 dark:border-white/10 text-slate-900 dark:text-slate-200 text-sm rounded-lg focus:ring-2 focus:ring-accent-blue/50 focus:border-accent-blue block p-3 transition-colors shadow-sm"
                   value={wizard.mgmtInterface}
                   onChange={(event) => onChange({ mgmtInterface: event.target.value, lanIdentified: false })}
                   disabled={netApplyBusy}
@@ -496,46 +350,12 @@ export default function Network({ wizard, onChange, validation }) {
                 <FieldError message={fieldErrors.mgmtInterface} />
               </div>
 
-              {wizard.mgmtMode === 'static' ? (
-                <>
-                  <div>
-                    <label className="label-text" htmlFor="serverIp">IP do servidor</label>
-                    <input id="serverIp" className="input-shell" value={wizard.serverIp} onChange={handleIpv4Change('serverIp')} inputMode="numeric" disabled={netApplyBusy} />
-                    <FieldError message={fieldErrors.serverIp} />
-                  </div>
-                  <div>
-                    <label className="label-text" htmlFor="mgmtNetmask">Mascara / prefixo</label>
-                    <select id="mgmtNetmask" className="input-shell" value={wizard.mgmtNetmask} onChange={(event) => onChange({ mgmtNetmask: event.target.value })} disabled={netApplyBusy}>
-                      <option value="255.255.255.0">255.255.255.0 (/24)</option>
-                      <option value="255.255.255.128">255.255.255.128 (/25)</option>
-                      <option value="255.255.255.252">255.255.255.252 (/30)</option>
-                      <option value="255.255.0.0">255.255.0.0 (/16)</option>
-                    </select>
-                    <FieldError message={fieldErrors.mgmtNetmask} />
-                  </div>
-                  <div>
-                    <label className="label-text" htmlFor="mgmtGateway">Gateway</label>
-                    <input id="mgmtGateway" className="input-shell" value={wizard.mgmtGateway} onChange={handleIpv4Change('mgmtGateway')} inputMode="numeric" disabled={netApplyBusy} />
-                    <FieldError message={fieldErrors.mgmtGateway} />
-                  </div>
-                  <div>
-                    <label className="label-text" htmlFor="mgmtDns">DNS</label>
-                    <input id="mgmtDns" className="input-shell" value={wizard.mgmtDns} onChange={(event) => onChange({ mgmtDns: event.target.value })} disabled={netApplyBusy} />
-                    <FieldError message={fieldErrors.mgmtDns} />
-                  </div>
-                </>
-              ) : (
-                <div className="sm:col-span-2 rounded-2xl border border-emerald-400/20 bg-emerald-400/10 p-3 text-sm text-emerald-100">
-                  IP, máscara, gateway e DNS serão obtidos automaticamente via DHCP na interface LAN/PXE.
-                </div>
-              )}
-
-              <div className="sm:col-span-2">
-                <label className="label-text" htmlFor="httpPort">Porta HTTP</label>
+              <div>
+                <label className="block text-sm font-bold text-slate-900 dark:text-slate-200 mb-2" htmlFor="httpPort">Porta HTTP do Painel</label>
                 <input
                   id="httpPort"
                   type="number"
-                  className="input-shell"
+                  className="w-full bg-white dark:bg-bg-surface border border-slate-300 dark:border-white/10 text-slate-900 dark:text-slate-200 text-sm rounded-lg focus:ring-2 focus:ring-accent-blue/50 focus:border-accent-blue block p-3 transition-colors shadow-sm"
                   value={wizard.httpPort}
                   onChange={(event) => onChange({ httpPort: Number(event.target.value || 0) })}
                   disabled={netApplyBusy}
@@ -544,215 +364,348 @@ export default function Network({ wizard, onChange, validation }) {
               </div>
             </div>
 
-            <div className="mt-4 flex items-center justify-between gap-4 rounded-xl border border-white/10 bg-slate-950/60 px-3 py-2.5">
-              <label className="flex items-center gap-2 text-sm text-slate-200">
-                <input
-                  type="checkbox"
-                  className="h-4 w-4 rounded"
-                  checked={Boolean(wizard.lanIdentified)}
-                  onChange={(event) => onChange({ lanIdentified: event.target.checked })}
-                  disabled={netApplyBusy}
-                />
-                Confirmei fisicamente a interface LAN/PXE ({wizard.mgmtInterface || 'não selecionada'}).
-              </label>
-              <button
-                type="button"
-                className="btn-primary !px-4 !py-1.5 text-xs"
-                onClick={handleApplyNetwork}
-                disabled={!wizard.mgmtInterface || netApplyBusy}
-              >
-                {netApplyBusy ? 'Aplicando…' : 'Aplicar na interface'}
+            {/* Configuração DHCP ou Manual */}
+            {isDhcp ? (
+              <div className="mt-4 bg-accent-blue/5 border border-accent-blue/20 rounded-xl p-5 flex gap-4">
+                <div className="text-accent-blue mt-0.5">
+                  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
+                </div>
+                <div>
+                  <h4 className="text-sm font-bold text-accent-blue mb-1">Configuração Automática Ativada</h4>
+                  <p className="text-sm text-slate-600 dark:text-slate-400">
+                    O IP do servidor, máscara de rede, gateway e servidores DNS serão obtidos automaticamente através do servidor DHCP da rede conectada na interface selecionada.
+                  </p>
+                </div>
+              </div>
+            ) : (
+              <div className="grid gap-6 animate-fade-in">
+                {/* Linha 2: IP e Máscara */}
+                <div className="grid gap-6 sm:grid-cols-2 pt-4 border-t border-slate-200/50 dark:border-white/5">
+                  <div>
+                    <label className="block text-sm font-bold text-slate-900 dark:text-slate-200 mb-2" htmlFor="serverIp">Endereço IP do Servidor</label>
+                    <input id="serverIp" className="w-full bg-white dark:bg-bg-surface border border-slate-300 dark:border-white/10 text-slate-900 dark:text-slate-200 text-sm rounded-lg focus:ring-2 focus:ring-accent-blue/50 focus:border-accent-blue block p-3 shadow-sm" value={wizard.serverIp} onChange={handleIpv4Change('serverIp')} inputMode="numeric" disabled={netApplyBusy} placeholder="Ex: 192.168.1.100" />
+                    <FieldError message={fieldErrors.serverIp} />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-bold text-slate-900 dark:text-slate-200 mb-2" htmlFor="mgmtNetmask">Máscara de Sub-rede</label>
+                    <select id="mgmtNetmask" className="w-full bg-white dark:bg-bg-surface border border-slate-300 dark:border-white/10 text-slate-900 dark:text-slate-200 text-sm rounded-lg focus:ring-2 focus:ring-accent-blue/50 focus:border-accent-blue block p-3 shadow-sm" value={wizard.mgmtNetmask} onChange={(event) => onChange({ mgmtNetmask: event.target.value })} disabled={netApplyBusy}>
+                      <option value="255.255.255.0">255.255.255.0 (/24)</option>
+                      <option value="255.255.255.128">255.255.255.128 (/25)</option>
+                      <option value="255.255.255.252">255.255.255.252 (/30)</option>
+                      <option value="255.255.0.0">255.255.0.0 (/16)</option>
+                    </select>
+                    <FieldError message={fieldErrors.mgmtNetmask} />
+                  </div>
+                </div>
+
+                {/* Linha 3: Gateway e DNS 1 */}
+                <div className="grid gap-6 sm:grid-cols-2">
+                  <div>
+                    <label className="block text-sm font-bold text-slate-900 dark:text-slate-200 mb-2" htmlFor="mgmtGateway">Gateway Padrão</label>
+                    <input id="mgmtGateway" className="w-full bg-white dark:bg-bg-surface border border-slate-300 dark:border-white/10 text-slate-900 dark:text-slate-200 text-sm rounded-lg focus:ring-2 focus:ring-accent-blue/50 focus:border-accent-blue block p-3 shadow-sm" value={wizard.mgmtGateway} onChange={handleIpv4Change('mgmtGateway')} inputMode="numeric" disabled={netApplyBusy} placeholder="Ex: 192.168.1.1" />
+                    <FieldError message={fieldErrors.mgmtGateway} />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-bold text-slate-900 dark:text-slate-200 mb-2" htmlFor="dns1">Servidor DNS Primário</label>
+                    <input id="dns1" className="w-full bg-white dark:bg-bg-surface border border-slate-300 dark:border-white/10 text-slate-900 dark:text-slate-200 text-sm rounded-lg focus:ring-2 focus:ring-accent-blue/50 focus:border-accent-blue block p-3 shadow-sm" value={dns1} onChange={(e) => setDns(e.target.value, dns2)} disabled={netApplyBusy} placeholder="Ex: 1.1.1.1" />
+                  </div>
+                </div>
+
+                {/* Linha 4: DNS 2 e Domínio */}
+                <div className="grid gap-6 sm:grid-cols-2">
+                  <div>
+                    <label className="block text-sm font-bold text-slate-900 dark:text-slate-200 mb-2" htmlFor="dns2">Servidor DNS Secundário <span className="text-slate-400 font-normal text-xs ml-1">(Opcional)</span></label>
+                    <input id="dns2" className="w-full bg-white dark:bg-bg-surface border border-slate-300 dark:border-white/10 text-slate-900 dark:text-slate-200 text-sm rounded-lg focus:ring-2 focus:ring-accent-blue/50 focus:border-accent-blue block p-3 shadow-sm" value={dns2} onChange={(e) => setDns(dns1, e.target.value)} disabled={netApplyBusy} placeholder="Ex: 8.8.8.8" />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-bold text-slate-900 dark:text-slate-200 mb-2" htmlFor="mgmtDomain">Search Domain <span className="text-slate-400 font-normal text-xs ml-1">(Opcional)</span></label>
+                    <input id="mgmtDomain" className="w-full bg-white dark:bg-bg-surface border border-slate-300 dark:border-white/10 text-slate-900 dark:text-slate-200 text-sm rounded-lg focus:ring-2 focus:ring-accent-blue/50 focus:border-accent-blue block p-3 shadow-sm" value={wizard.mgmtDomain || ''} onChange={(e) => onChange({ mgmtDomain: e.target.value })} disabled={netApplyBusy} placeholder="Ex: local.kryonix.net" />
+                  </div>
+                </div>
+              </div>
+            )}
+          </div>
+        </div>
+
+        {/* Advanced Settings (WAN) */}
+        <div className="mt-6 bg-white/50 dark:bg-bg-elevated/30 border border-slate-200/50 dark:border-white/5 rounded-2xl shadow-sm overflow-hidden">
+          <details className="group" onToggle={(e) => setShowWanAdvanced(e.currentTarget.open)} open={showWanAdvanced}>
+            <summary className="flex items-center justify-between gap-4 p-5 cursor-pointer list-none select-none hover:bg-slate-50 dark:hover:bg-white/5 transition-colors">
+              <div className="flex items-center gap-3">
+                <span className="text-sm font-bold text-slate-900 dark:text-slate-200">Rede WAN (Avançado)</span>
+                <span className={`text-xs px-2 py-0.5 rounded-full font-semibold ${wanEnabled ? 'bg-accent-blue/10 text-accent-blue' : 'bg-slate-200/50 dark:bg-white/5 text-slate-500'}`}>
+                  {wanEnabled ? 'Ativada' : 'Opcional'}
+                </span>
+              </div>
+              <svg className="w-5 h-5 text-slate-400 group-open:rotate-180 transition-transform duration-200" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+              </svg>
+            </summary>
+
+            <div className="p-5 pt-0 border-t border-slate-200/50 dark:border-white/5 mt-2 space-y-5 animate-fade-in">
+              <p className="text-sm text-slate-500 dark:text-slate-400">Configure uma interface dedicada para uplink de internet apenas se o servidor possuir uma porta dedicada para WAN.</p>
+
+              <div>
+                <label className="block text-sm font-bold text-slate-900 dark:text-slate-200 mb-2" htmlFor="wanInterface">Interface WAN</label>
+                <select id="wanInterface" className="w-full sm:max-w-xs bg-white dark:bg-bg-surface border border-slate-300 dark:border-white/10 text-slate-900 dark:text-slate-200 text-sm rounded-lg focus:ring-2 focus:ring-accent-blue/50 focus:border-accent-blue block p-3 shadow-sm" value={wizard.wanInterface} onChange={(event) => handleWanInterfaceChange(event.target.value)} disabled={netApplyBusy}>
+                  <option value="">Sem uplink dedicado</option>
+                  {ifaceNames
+                    .filter((item) => item !== wizard.mgmtInterface)
+                    .map((item) => (
+                      <option key={item} value={item}>{item}</option>
+                    ))}
+                </select>
+                <FieldError message={fieldErrors.wanInterface} />
+              </div>
+
+              {wanEnabled && (
+                <div className="pt-4 border-t border-slate-200/50 dark:border-white/5">
+                  <div className="inline-flex bg-slate-200/50 dark:bg-bg-surface/50 p-1 rounded-lg border border-slate-200/50 dark:border-white/5 mb-5">
+                    <button type="button" className={`px-4 py-1.5 rounded-md text-xs font-bold transition-all ${wizard.wanMode === 'dhcp' ? 'bg-white dark:bg-bg-elevated text-accent-blue shadow-sm ring-1 ring-slate-200 dark:ring-white/10' : 'text-slate-500 hover:text-slate-700 dark:hover:text-slate-200'}`} onClick={() => onChange({ wanMode: 'dhcp' })} disabled={netApplyBusy}>DHCP</button>
+                    <button type="button" className={`px-4 py-1.5 rounded-md text-xs font-bold transition-all ${wizard.wanMode === 'static' ? 'bg-white dark:bg-bg-elevated text-accent-blue shadow-sm ring-1 ring-slate-200 dark:ring-white/10' : 'text-slate-500 hover:text-slate-700 dark:hover:text-slate-200'}`} onClick={() => onChange({ wanMode: 'static' })} disabled={netApplyBusy}>IP estático</button>
+                    <button type="button" className={`px-4 py-1.5 rounded-md text-xs font-bold transition-all ${wizard.wanMode === 'pppoe' ? 'bg-white dark:bg-bg-elevated text-accent-blue shadow-sm ring-1 ring-slate-200 dark:ring-white/10' : 'text-slate-500 hover:text-slate-700 dark:hover:text-slate-200'}`} onClick={() => onChange({ wanMode: 'pppoe' })} disabled={netApplyBusy}>PPPoE</button>
+                  </div>
+
+                  {wizard.wanMode === 'static' && (
+                    <div className="grid gap-4 sm:grid-cols-2 animate-fade-in">
+                      <div>
+                        <label className="block text-sm font-bold text-slate-900 dark:text-slate-200 mb-1" htmlFor="wanAddress">IP WAN</label>
+                        <input id="wanAddress" className="w-full bg-white dark:bg-bg-surface border border-slate-300 dark:border-white/10 text-sm rounded-lg p-2.5" value={wizard.wanAddress} onChange={handleIpv4Change('wanAddress')} inputMode="numeric" disabled={netApplyBusy} />
+                      </div>
+                      <div>
+                        <label className="block text-sm font-bold text-slate-900 dark:text-slate-200 mb-1" htmlFor="wanNetmask">Mascara WAN</label>
+                        <select id="wanNetmask" className="w-full bg-white dark:bg-bg-surface border border-slate-300 dark:border-white/10 text-sm rounded-lg p-2.5" value={wizard.wanNetmask} onChange={(event) => onChange({ wanNetmask: event.target.value })} disabled={netApplyBusy}>
+                          <option value="255.255.255.0">255.255.255.0 (/24)</option>
+                          <option value="255.255.255.128">255.255.255.128 (/25)</option>
+                        </select>
+                      </div>
+                      <div>
+                        <label className="block text-sm font-bold text-slate-900 dark:text-slate-200 mb-1" htmlFor="wanGateway">Gateway WAN</label>
+                        <input id="wanGateway" className="w-full bg-white dark:bg-bg-surface border border-slate-300 dark:border-white/10 text-sm rounded-lg p-2.5" value={wizard.wanGateway} onChange={handleIpv4Change('wanGateway')} inputMode="numeric" disabled={netApplyBusy} />
+                      </div>
+                      <div>
+                        <label className="block text-sm font-bold text-slate-900 dark:text-slate-200 mb-1" htmlFor="wanDns">DNS WAN</label>
+                        <input id="wanDns" className="w-full bg-white dark:bg-bg-surface border border-slate-300 dark:border-white/10 text-sm rounded-lg p-2.5" value={wizard.wanDns} onChange={(event) => onChange({ wanDns: event.target.value })} disabled={netApplyBusy} />
+                      </div>
+                    </div>
+                  )}
+
+                  {wizard.wanMode === 'pppoe' && (
+                    <div className="grid gap-4 sm:grid-cols-2 animate-fade-in">
+                      <div>
+                        <label className="block text-sm font-bold text-slate-900 dark:text-slate-200 mb-1" htmlFor="pppoeUser">Usuário PPPoE</label>
+                        <input id="pppoeUser" className="w-full bg-white dark:bg-bg-surface border border-slate-300 dark:border-white/10 text-sm rounded-lg p-2.5" value={wizard.pppoeUser || ''} onChange={(event) => onChange({ pppoeUser: event.target.value })} />
+                      </div>
+                      <div>
+                        <label className="block text-sm font-bold text-slate-900 dark:text-slate-200 mb-1" htmlFor="pppoePassword">Senha PPPoE</label>
+                        <div className="flex gap-2">
+                          <input id="pppoePassword" type={showPppoePassword ? 'text' : 'password'} className="w-full bg-white dark:bg-bg-surface border border-slate-300 dark:border-white/10 text-sm rounded-lg p-2.5" value={wizard.pppoePassword || ''} onChange={(event) => onChange({ pppoePassword: event.target.value })} />
+                          <button type="button" className="px-3 py-2 bg-slate-100 dark:bg-white/5 border border-slate-300 dark:border-white/10 rounded-lg hover:bg-slate-200 dark:hover:bg-white/10 transition-colors" onClick={() => setShowPppoePassword(!showPppoePassword)}>
+                            {showPppoePassword ? 'Ocultar' : 'Mostrar'}
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+                  )}
+
+                  <div className="mt-5">
+                    <label className="flex items-start gap-3 bg-slate-50 dark:bg-slate-950/40 p-4 rounded-xl border border-slate-200/50 dark:border-white/5 cursor-pointer">
+                      <input type="checkbox" className="mt-1 h-4 w-4 rounded border-slate-300 text-accent-blue focus:ring-accent-blue" checked={Boolean(wizard.wanIdentified)} onChange={(event) => onChange({ wanIdentified: event.target.checked })} disabled={netApplyBusy} />
+                      <span className="text-sm text-slate-700 dark:text-slate-300">Confirmei a seleção física da interface WAN <strong>({wizard.wanInterface})</strong> e os parâmetros acima estão corretos.</span>
+                    </label>
+                  </div>
+                </div>
+              )}
+            </div>
+          </details>
+        </div>
+
+        {/* Application & Validation Errors inline */}
+        {error && (
+          <div className="mt-6 bg-red-50 dark:bg-red-500/10 border border-red-200 dark:border-red-500/20 rounded-xl p-4 text-sm text-red-600 dark:text-red-400 flex items-start gap-3">
+            <span className="mt-0.5">⚠️</span>
+            <div>{error}</div>
+          </div>
+        )}
+        {sameNicSelected && (
+          <div className="mt-6 bg-red-50 dark:bg-red-500/10 border border-red-200 dark:border-red-500/20 rounded-xl p-4 text-sm text-red-600 dark:text-red-400 flex items-start gap-3">
+            <span className="mt-0.5">⚠️</span>
+            <div>LAN/PXE e WAN não podem usar a mesma placa de rede. Por favor, selecione interfaces distintas.</div>
+          </div>
+        )}
+        {wizard.netApplyError && (
+          <div className="mt-6 bg-red-50 dark:bg-red-500/10 border border-red-200 dark:border-red-500/20 rounded-xl p-4 text-sm text-red-600 dark:text-red-400 flex items-start gap-3">
+            <span className="mt-0.5">⚠️</span>
+            <div>
+              <strong className="block mb-1">Falha ao aplicar a rede</strong>
+              {wizard.netApplyError}
+            </div>
+          </div>
+        )}
+
+        {/* Confirmação e Ação Principal */}
+        <div className="mt-8 bg-white/50 dark:bg-bg-elevated/30 border border-slate-200/50 dark:border-white/5 rounded-2xl p-6 shadow-sm flex flex-col sm:flex-row items-start sm:items-center justify-between gap-6">
+          <label className="flex items-start gap-3 cursor-pointer flex-1">
+            <input
+              type="checkbox"
+              className="mt-1 h-5 w-5 rounded border-slate-300 text-accent-blue focus:ring-accent-blue transition-colors"
+              checked={Boolean(wizard.lanIdentified)}
+              onChange={(event) => onChange({ lanIdentified: event.target.checked })}
+              disabled={netApplyBusy}
+            />
+            <span className="text-sm font-medium text-slate-700 dark:text-slate-300 leading-relaxed">
+              Confirmo que a interface <strong className="text-slate-900 dark:text-white">{wizard.mgmtInterface || '[Não selecionada]'}</strong> corresponde à porta física correta para o serviço LAN/PXE.
+            </span>
+          </label>
+          <button
+            type="button"
+            className="w-full sm:w-auto btn-primary px-8 py-3 text-sm font-bold shadow-panel flex items-center justify-center gap-2 min-w-[200px]"
+            onClick={handleApplyNetwork}
+            disabled={!wizard.mgmtInterface || netApplyBusy || !wizard.lanIdentified}
+          >
+            {netApplyBusy ? (
+              <>
+                <span className="animate-spin">↻</span> Aplicando...
+              </>
+            ) : (
+              'Aplicar Configuração'
+            )}
+          </button>
+        </div>
+
+      </section>
+
+
+      {/* ── ÁREA CONTEXTUAL (STATUS/RESUMO - 30%) ─────────────────────── */}
+      <aside className="flex flex-col min-h-0 overflow-y-auto pl-2 pb-12 border-l border-slate-200/50 dark:border-white/5">
+
+        {/* Status Live */}
+        <div className="mb-8">
+          <h3 className="text-xs font-bold uppercase tracking-widest text-slate-400 mb-4 px-1">Status da Conexão</h3>
+          <div className="bg-white/50 dark:bg-bg-elevated/30 border border-slate-200/50 dark:border-white/5 rounded-2xl p-5 shadow-sm">
+            <div className="flex items-center justify-between mb-4">
+              <span className={`inline-flex items-center gap-2 px-3 py-1 rounded-full text-xs font-bold ${
+                wizard.netConnected ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-500/10 dark:text-emerald-400' :
+                wizard.netOffline ? 'bg-amber-100 text-amber-700 dark:bg-amber-500/10 dark:text-amber-400' :
+                'bg-slate-100 text-slate-600 dark:bg-white/5 dark:text-slate-400'
+              }`}>
+                <span className={`w-2 h-2 rounded-full ${wizard.netConnected ? 'bg-emerald-500' : wizard.netOffline ? 'bg-amber-500' : 'bg-slate-400'}`}></span>
+                {wizard.netConnected ? 'Conectado (Online)' : wizard.netOffline ? 'Modo Offline Ativo' : 'Desconectado'}
+              </span>
+              <button onClick={loadInterfaces} disabled={loading} className="p-1.5 text-slate-400 hover:text-slate-700 dark:hover:text-slate-200 transition-colors" title="Atualizar">
+                <span className={`block w-4 h-4 ${loading ? 'animate-spin' : ''}`}>↻</span>
               </button>
             </div>
-          </div>
-
-          <div className="rounded-2xl border border-white/10 bg-white/[0.03] p-4">
-            <details className="group" onToggle={(e) => setShowWanAdvanced(e.currentTarget.open)} open={showWanAdvanced}>
-              <summary className="flex items-center justify-between gap-4 cursor-pointer list-none select-none">
-                <div className="flex items-center gap-3">
-                  <span className="text-xs font-semibold uppercase tracking-[0.22em] text-slate-400">WAN opcional</span>
-                  <span className={`metric-chip ${wanEnabled ? 'text-emerald-300' : 'text-slate-400'}`}>
-                    {wanEnabled ? wizard.wanInterface + ' (' + wizard.wanMode + ')' : 'Sem WAN'}
-                  </span>
-                </div>
-                <svg className="w-5 h-5 text-slate-400 group-open:rotate-180 transition-transform duration-200" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
-                </svg>
-              </summary>
-
-              <div className="mt-4 space-y-4">
-                <div className="text-sm text-slate-400">Preencha apenas se houver uma segunda interface dedicada para uplink.</div>
-
-                <div>
-                  <label className="label-text" htmlFor="wanInterface">Interface WAN</label>
-                  <select id="wanInterface" className="input-shell" value={wizard.wanInterface} onChange={(event) => handleWanInterfaceChange(event.target.value)} disabled={netApplyBusy}>
-                    <option value="">Sem uplink dedicado</option>
-                    {ifaceNames
-                      .filter((item) => item !== wizard.mgmtInterface)
-                      .map((item) => (
-                        <option key={item} value={item}>{item}</option>
-                      ))}
-                  </select>
-                  <FieldError message={fieldErrors.wanInterface} />
-                </div>
-
-                {wanEnabled ? (
-                  <>
-                    <div className="grid gap-2 sm:grid-cols-3">
-                      <button type="button" className={wizard.wanMode === 'dhcp' ? 'btn-primary' : 'btn-secondary'} onClick={() => onChange({ wanMode: 'dhcp' })} disabled={netApplyBusy}>
-                        DHCP
-                      </button>
-                      <button type="button" className={wizard.wanMode === 'static' ? 'btn-primary' : 'btn-secondary'} onClick={() => onChange({ wanMode: 'static' })} disabled={netApplyBusy}>
-                        IP estático
-                      </button>
-                      <button type="button" className={wizard.wanMode === 'pppoe' ? 'btn-primary' : 'btn-secondary'} onClick={() => onChange({ wanMode: 'pppoe' })} disabled={netApplyBusy}>
-                        PPPoE
-                      </button>
-                    </div>
-
-                    {wizard.wanMode === 'static' ? (
-                      <div className="grid gap-4 sm:grid-cols-2">
-                        <div>
-                          <label className="label-text" htmlFor="wanAddress">IP WAN</label>
-                          <input id="wanAddress" className="input-shell" value={wizard.wanAddress} onChange={handleIpv4Change('wanAddress')} inputMode="numeric" disabled={netApplyBusy} />
-                          <FieldError message={fieldErrors.wanAddress} />
-                        </div>
-                        <div>
-                          <label className="label-text" htmlFor="wanNetmask">Mascara WAN</label>
-                          <select id="wanNetmask" className="input-shell" value={wizard.wanNetmask} onChange={(event) => onChange({ wanNetmask: event.target.value })} disabled={netApplyBusy}>
-                            <option value="255.255.255.0">255.255.255.0 (/24)</option>
-                            <option value="255.255.255.128">255.255.255.128 (/25)</option>
-                            <option value="255.255.255.252">255.255.255.252 (/30)</option>
-                            <option value="255.255.0.0">255.255.0.0 (/16)</option>
-                          </select>
-                          <FieldError message={fieldErrors.wanNetmask} />
-                        </div>
-                        <div>
-                          <label className="label-text" htmlFor="wanGateway">Gateway WAN</label>
-                          <input id="wanGateway" className="input-shell" value={wizard.wanGateway} onChange={handleIpv4Change('wanGateway')} inputMode="numeric" disabled={netApplyBusy} />
-                          <FieldError message={fieldErrors.wanGateway} />
-                        </div>
-                        <div>
-                          <label className="label-text" htmlFor="wanDns">DNS WAN</label>
-                          <input id="wanDns" className="input-shell" value={wizard.wanDns} onChange={(event) => onChange({ wanDns: event.target.value })} disabled={netApplyBusy} />
-                          <FieldError message={fieldErrors.wanDns} />
-                        </div>
-                      </div>
-                    ) : null}
-
-                    {wizard.wanMode === 'pppoe' ? (
-                      <div className="grid gap-4 sm:grid-cols-2">
-                        <div>
-                          <label className="label-text" htmlFor="pppoeUser">Usuário PPPoE</label>
-                          <input id="pppoeUser" className="input-shell" value={wizard.pppoeUser || ''} onChange={(event) => onChange({ pppoeUser: event.target.value })} />
-                          <FieldError message={fieldErrors.pppoeUser} />
-                        </div>
-                        <div>
-                          <label className="label-text" htmlFor="pppoePassword">Senha PPPoE</label>
-                          <div className="flex gap-2">
-                            <input
-                              id="pppoePassword"
-                              type={showPppoePassword ? 'text' : 'password'}
-                              className="input-shell flex-1"
-                              value={wizard.pppoePassword || ''}
-                              onChange={(event) => onChange({ pppoePassword: event.target.value })}
-                            />
-                            <button type="button" className="btn-secondary !px-3 !py-2" onClick={() => setShowPppoePassword((previous) => !previous)}>
-                              {showPppoePassword ? '󰈈' : '󰈉'}
-                            </button>
-                          </div>
-                          <FieldError message={fieldErrors.pppoePassword} />
-                        </div>
-                      </div>
-                    ) : null}
-
-                    <label className="flex items-center gap-2 rounded-xl border border-white/10 bg-slate-950/60 px-3 py-2.5 text-sm text-slate-200">
-                      <input
-                        type="checkbox"
-                        className="h-4 w-4 rounded"
-                        checked={Boolean(wizard.wanIdentified)}
-                        onChange={(event) => onChange({ wanIdentified: event.target.checked })}
-                        disabled={netApplyBusy}
-                      />
-                      Confirmei fisicamente a interface WAN ({wizard.wanInterface || 'não selecionada'}).
-                    </label>
-                  </>
-                ) : (
-                  <div className="rounded-2xl border border-emerald-400/20 bg-emerald-400/10 p-3 text-sm text-emerald-100">
-                    Sem WAN dedicada: o servidor usará apenas a interface LAN/PXE.
-                  </div>
-                )}
+            {wizard.netConnected && netStatus?.ssid && (
+              <div className="text-sm font-medium text-slate-700 dark:text-slate-300 mt-2">
+                Rede: <span className="font-bold">{netStatus.ssid}</span>
               </div>
-            </details>
+            )}
+
+            {/* Wi-Fi Setup Inline */}
+            {hasWifi && !wizard.netConnected && !wizard.netOffline && (
+              <div className="mt-4 pt-4 border-t border-slate-200/50 dark:border-white/5">
+                <p className="text-xs text-slate-500 mb-3">Rede Wi-Fi detectada. Conecte-se para continuar online.</p>
+                <div className="space-y-3">
+                  <div className="flex gap-2">
+                    <select className="flex-1 bg-white dark:bg-bg-surface border border-slate-300 dark:border-white/10 text-xs rounded p-2" value={selectedWifiIface} onChange={(e) => setSelectedWifiIface(e.target.value)}>
+                      {wifiIfaces.map(i => <option key={i.name} value={i.name}>{i.name}</option>)}
+                    </select>
+                    <button type="button" className="px-3 py-2 bg-slate-100 dark:bg-white/5 border border-slate-300 dark:border-white/10 rounded text-xs font-medium hover:bg-slate-200 dark:hover:bg-white/10 transition-colors" onClick={scanWifi} disabled={wifiScanning || !selectedWifiIface}>
+                      {wifiScanning ? 'Buscando…' : 'Buscar'}
+                    </button>
+                  </div>
+
+                  {wifiList.length > 0 && (
+                    <div className="space-y-2 animate-fade-in">
+                      <select className="w-full bg-white dark:bg-bg-surface border border-slate-300 dark:border-white/10 text-xs rounded p-2" value={wifiSsid} onChange={(e) => setWifiSsid(e.target.value)}>
+                        <option value="">Selecione a rede</option>
+                        {wifiList.map((w) => (
+                          <option key={w.ssid} value={w.ssid}>{w.ssid} ({w.signal}%)</option>
+                        ))}
+                      </select>
+                      {wifiSsid && (
+                        <div className="flex gap-2">
+                          <input type="password" placeholder="Senha" className="flex-1 bg-white dark:bg-bg-surface border border-slate-300 dark:border-white/10 text-xs rounded p-2" value={wifiPassword} onChange={(e) => setWifiPassword(e.target.value)} />
+                          <button type="button" className="px-3 py-2 bg-accent-blue text-white rounded text-xs font-bold hover:bg-blue-600 transition-colors shadow-sm" onClick={connectWifi} disabled={connecting}>
+                            {connecting ? '...' : 'Conectar'}
+                          </button>
+                        </div>
+                      )}
+                    </div>
+                  )}
+                  {connectMsg && <div className="text-xs text-accent-blue font-medium mt-2">{connectMsg}</div>}
+                </div>
+              </div>
+            )}
+
+            {/* Continuar Offline */}
+            {!wizard.netConnected && (
+              <div className="mt-4 pt-4 border-t border-slate-200/50 dark:border-white/5">
+                <button type="button" onClick={continueOffline} className={`w-full py-2 rounded-lg text-xs font-bold transition-colors ${wizard.netOffline ? 'bg-amber-100 text-amber-700 dark:bg-amber-500/20 dark:text-amber-400' : 'bg-slate-100 text-slate-600 hover:bg-slate-200 dark:bg-white/5 dark:text-slate-400 dark:hover:bg-white/10'}`}>
+                  {wizard.netOffline ? 'Modo Offline Ativo' : 'Continuar sem internet (Offline)'}
+                </button>
+                {wizard.netOffline && <p className="text-[10px] text-amber-600 dark:text-amber-400/80 mt-2 leading-relaxed">Nenhum pacote será baixado. A instalação usará apenas os recursos nativos presentes na mídia local.</p>}
+              </div>
+            )}
           </div>
         </div>
-      </section>
 
-      <section className="section-panel min-h-0 overflow-y-auto p-4">
-        <div className="text-xs font-semibold uppercase tracking-[0.22em] text-slate-400">Resumo operacional</div>
-        <div className="mt-4 space-y-3">
-          <SummaryRow label="Interfaces detectadas" value={loading ? 'carregando' : String(interfaces.length)} />
-          <SummaryRow label="LAN/PXE" value={wizard.mgmtInterface || 'pendente'} />
-          <SummaryRow label="IP LAN/PXE" value={wizard.mgmtMode === 'dhcp' ? 'DHCP (automático)' : (wizard.serverIp || 'pendente')} />
-          <SummaryRow label="WAN" value={wanEnabled ? `${wizard.wanInterface} (${wizard.wanMode})` : 'desabilitada'} />
-          <SummaryRow label="Status Live" value={wizard.netConnected ? 'Online' : wizard.netOffline ? 'Offline' : 'Desconectado'} />
-        </div>
-
-        {sameNicSelected ? (
-          <div className="mt-4 rounded-2xl border border-rose-400/25 bg-rose-400/10 p-3 text-sm text-rose-200">
-            LAN/PXE e WAN não podem usar a mesma placa de rede.
-          </div>
-        ) : null}
-
-        {error ? (
-          <div className="mt-4 rounded-2xl border border-rose-400/25 bg-rose-400/10 p-3 text-sm text-rose-200">
-            {error}
-          </div>
-        ) : null}
-
-        {netApplyBusy ? (
-          <div className="mt-4 rounded-2xl border border-cyan-400/25 bg-cyan-400/10 p-3 text-sm text-cyan-100" role="status" aria-live="polite">
-            <div className="flex items-center gap-2 font-semibold text-cyan-50">
-              <span className="inline-block animate-spin">↻</span> Aplicando configuração de rede…
+        {/* Resumo da Configuração */}
+        <div className="mb-8">
+          <h3 className="text-xs font-bold uppercase tracking-widest text-slate-400 mb-4 px-1">Resumo de Configuração</h3>
+          <div className="bg-white/50 dark:bg-bg-elevated/30 border border-slate-200/50 dark:border-white/5 rounded-2xl p-5 shadow-sm">
+            <div className="flex flex-col gap-1">
+              <SummaryRow label="Total de Interfaces" value={loading ? '...' : String(interfaces.length)} />
+              <SummaryRow label="Modo Selecionado" value={isDhcp ? 'DHCP' : 'Manual'} />
+              <SummaryRow label="LAN/PXE Escolhida" value={wizard.mgmtInterface || '-'} highlight={!!wizard.mgmtInterface} />
+              <SummaryRow label="IP Atribuído" value={isDhcp ? 'Automático' : (wizard.serverIp || '-')} />
+              <SummaryRow label="Uplink WAN" value={wanEnabled ? `${wizard.wanInterface}` : 'Desativado'} />
             </div>
-            <div className="mt-1 text-xs text-cyan-200/80">Os campos estão bloqueados e o avanço está suspenso até o backend responder.</div>
           </div>
-        ) : null}
-
-        {wizard.netApplyError ? (
-          <div className="mt-4 rounded-2xl border border-rose-400/25 bg-rose-400/10 p-3 text-sm text-rose-200">
-            <div className="font-semibold text-rose-50">Falha ao aplicar a rede</div>
-            <div className="mt-1">{wizard.netApplyError}</div>
-            <div className="mt-2 text-xs text-rose-200/70">O avanço foi bloqueado. Ajuste os dados e tente novamente.</div>
-          </div>
-        ) : null}
-
-        {wizard.networkDhcpPending ? (
-          <div className="mt-4 rounded-2xl border border-amber-400/20 bg-amber-400/10 p-3 text-sm text-amber-100">
-            <span className="font-bold text-amber-200">DHCP pendente:</span> a configuração foi aplicada, mas a interface ainda não recebeu um IP via DHCP. O endereço será obtido na rede; o avanço foi liberado mesmo assim.
-          </div>
-        ) : null}
-
-        {warnings.length > 0 ? (
-          <div className="mt-4 rounded-2xl border border-amber-400/20 bg-amber-400/10 p-4 text-sm text-amber-100">
-            <div className="font-semibold text-amber-50">Avisos de Configuração</div>
-            <ul className="mt-2 space-y-1">
-              {warnings.map((warning) => <li key={warning}>- {warning}</li>)}
-            </ul>
-          </div>
-        ) : null}
-
-        <div className="mt-6 rounded-2xl border border-white/10 bg-white/[0.03] p-4 text-sm text-slate-300">
-          <div className="font-semibold text-white">Requisitos de Avanço</div>
-          <ul className="mt-3 space-y-2 text-slate-400">
-            <li className={wizard.netConnected || wizard.netOffline ? 'text-emerald-300' : 'text-slate-200'}>
-              - {wizard.netConnected ? '󰄬 Conectado à rede' : wizard.netOffline ? '󰄬 Modo offline selecionado' : '󰅙 Conecte-se ou use Modo Offline'}
-            </li>
-            <li className={wizard.hostName ? 'text-emerald-300' : 'text-slate-400'}>- Hostname definido</li>
-            <li className={wizard.mgmtInterface ? 'text-emerald-300' : 'text-slate-400'}>- Interface LAN/PXE selecionada</li>
-          </ul>
         </div>
-      </section>
+
+        {/* Checklist e Avisos */}
+        <div>
+          <h3 className="text-xs font-bold uppercase tracking-widest text-slate-400 mb-4 px-1">Checklist de Liberação</h3>
+          <div className="bg-white/50 dark:bg-bg-elevated/30 border border-slate-200/50 dark:border-white/5 rounded-2xl p-5 shadow-sm">
+            <ul className="space-y-3 text-sm">
+              <li className="flex items-center gap-3">
+                <span className={`w-5 h-5 flex items-center justify-center rounded-full text-xs font-bold ${wizard.netConnected || wizard.netOffline ? 'bg-emerald-100 text-emerald-600 dark:bg-emerald-500/20 dark:text-emerald-400' : 'bg-slate-200 text-slate-500 dark:bg-white/10 dark:text-slate-500'}`}>✓</span>
+                <span className={wizard.netConnected || wizard.netOffline ? 'text-slate-900 dark:text-slate-200 font-medium' : 'text-slate-500'}>Conectividade resolvida</span>
+              </li>
+              <li className="flex items-center gap-3">
+                <span className={`w-5 h-5 flex items-center justify-center rounded-full text-xs font-bold ${wizard.hostName ? 'bg-emerald-100 text-emerald-600 dark:bg-emerald-500/20 dark:text-emerald-400' : 'bg-slate-200 text-slate-500 dark:bg-white/10 dark:text-slate-500'}`}>✓</span>
+                <span className={wizard.hostName ? 'text-slate-900 dark:text-slate-200 font-medium' : 'text-slate-500'}>Hostname configurado</span>
+              </li>
+              <li className="flex items-center gap-3">
+                <span className={`w-5 h-5 flex items-center justify-center rounded-full text-xs font-bold ${wizard.mgmtInterface ? 'bg-emerald-100 text-emerald-600 dark:bg-emerald-500/20 dark:text-emerald-400' : 'bg-slate-200 text-slate-500 dark:bg-white/10 dark:text-slate-500'}`}>✓</span>
+                <span className={wizard.mgmtInterface ? 'text-slate-900 dark:text-slate-200 font-medium' : 'text-slate-500'}>Interface LAN selecionada</span>
+              </li>
+              <li className="flex items-center gap-3">
+                <span className={`w-5 h-5 flex items-center justify-center rounded-full text-xs font-bold ${wizard.lanIdentified ? 'bg-emerald-100 text-emerald-600 dark:bg-emerald-500/20 dark:text-emerald-400' : 'bg-slate-200 text-slate-500 dark:bg-white/10 dark:text-slate-500'}`}>✓</span>
+                <span className={wizard.lanIdentified ? 'text-slate-900 dark:text-slate-200 font-medium' : 'text-slate-500'}>Rede física confirmada</span>
+              </li>
+            </ul>
+
+            {wizard.networkDhcpPending && (
+              <div className="mt-5 p-3 bg-amber-50 dark:bg-amber-500/10 border border-amber-200 dark:border-amber-500/20 rounded-xl text-xs text-amber-700 dark:text-amber-400">
+                <strong>Nota:</strong> Configuração DHCP aplicada, aguardando lease na interface. O avanço está liberado.
+              </div>
+            )}
+
+            {warnings.length > 0 && (
+              <div className="mt-5 p-4 bg-amber-50 dark:bg-amber-500/10 border border-amber-200 dark:border-amber-500/20 rounded-xl">
+                <strong className="text-xs text-amber-700 dark:text-amber-400 uppercase tracking-wider block mb-2">Avisos Relevantes</strong>
+                <ul className="text-xs text-amber-700/80 dark:text-amber-400/80 space-y-1 list-disc pl-4">
+                  {warnings.map((w, i) => <li key={i}>{w}</li>)}
+                </ul>
+              </div>
+            )}
+          </div>
+        </div>
+      </aside>
+
     </div>
   );
 }
