@@ -192,8 +192,6 @@ export function buildInstallPlanPayload(draftInput) {
     }
   }
 
-  // O tema escuro é obrigatório na arquitetura atual do Kryonix.
-  features.desktop['appearance.dark-mode'] = true;
 
   // /srv/data ativa para: features de IA que exigem volume persistente,
   // storage.srv-data explicito, e perfis ai-local/full.
@@ -238,13 +236,6 @@ export function buildInstallPlanPayload(draftInput) {
     targetRemoteAccess: {
       enabled: Boolean(draft.targetRemoteAccessEnabled),
       port: 8080,
-    },
-    appearance: {
-      installerTheme: 'dark',
-      desktopThemeMode: 'dark',
-      accent: 'blue',
-      plasmaPreset: 'kryonix-blue-glass-dark',
-      sddmPreset: 'kryonix-clean',
     },
     disk: {
       mode: diskMode,

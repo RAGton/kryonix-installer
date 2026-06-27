@@ -12,6 +12,7 @@ export default function Install({ draft, uiState, validation, onChange }) {
   const logRef = useRef(null);
   const stickToBottomRef = useRef(true);
   const [rebootBusy, setRebootBusy] = useState(false);
+  const [safetyChecked, setSafetyChecked] = useState(false);
   const [installerToken, setInstallerToken] = useState(() => sessionStorage.getItem('installer_token') || '');
 
   useEffect(() => {
@@ -127,7 +128,7 @@ export default function Install({ draft, uiState, validation, onChange }) {
   }
 
   const handleStartRequest = () => {
-    if (installerToken && uiState.destructiveConfirmed && installValidation.blockingIssues.length === 0) {
+    if (installerToken && uiState.destructiveConfirmed && installValidation.blockingIssues.length === 0 && safetyChecked) {
       startInstallation();
     }
   };
@@ -207,7 +208,7 @@ export default function Install({ draft, uiState, validation, onChange }) {
               <button
                 type="button"
                 className="btn-primary w-full shadow-lg shadow-accent-blue/20"
-                disabled={!uiState.destructiveConfirmed || installValidation.blockingIssues.length > 0 || !installerToken}
+                disabled={!uiState.destructiveConfirmed || installValidation.blockingIssues.length > 0 || !installerToken || !safetyChecked}
                 onClick={handleStartRequest}
               >
                 Instalar agora
@@ -253,13 +254,25 @@ export default function Install({ draft, uiState, validation, onChange }) {
           {/* Gate Destrutivo (Segurança da operação) */}
           {!installStarted && (
             <div className="rounded-xl border border-rose-400/20 bg-rose-400/10 p-4">
-              <div className="flex items-center gap-2 mb-1">
+              <div className="flex items-center gap-2 mb-2">
                 <svg className="w-4 h-4 text-rose-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"></path></svg>
                 <h3 className="text-[11px] font-bold uppercase tracking-widest text-rose-300">Segurança da Operação</h3>
               </div>
-              <p className="text-xs text-rose-200/80 font-medium leading-relaxed">
+              <p className="text-xs text-rose-200/80 font-medium leading-relaxed mb-4">
                 O backend recebeu autorização na etapa anterior para executar operações destrutivas no disco. Revise o alvo antes de iniciar.
               </p>
+              
+              <label className="flex items-start gap-3 p-3 rounded-lg border border-rose-500/20 bg-rose-500/10 cursor-pointer hover:bg-rose-500/20 transition-colors">
+                <input 
+                  type="checkbox"
+                  className="mt-0.5 w-4 h-4 rounded border-rose-500/30 bg-black/50 text-rose-500 focus:ring-rose-500/30"
+                  checked={safetyChecked}
+                  onChange={(e) => setSafetyChecked(e.target.checked)}
+                />
+                <span className="text-xs font-semibold text-rose-200">
+                  Confirmo que revisei o disco alvo e autorizo apagar os dados selecionados.
+                </span>
+              </label>
             </div>
           )}
 
