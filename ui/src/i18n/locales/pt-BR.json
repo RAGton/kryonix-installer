@@ -1,0 +1,190 @@
+{
+  "steps": {
+    "welcome": {
+      "title": "Kryonix Installer",
+      "subtitle": "Configuração inicial do ambiente."
+    },
+    "eula": {
+      "title": "EULA e Avisos",
+      "subtitle": "Aceite explícito antes de qualquer ação destrutiva."
+    },
+    "source": {
+      "title": "Fonte de Instalação",
+      "subtitle": "Offline ou repositório GitHub remoto."
+    },
+    "timezone": {
+      "title": "Fuso Horário",
+      "subtitle": "Sincronização de data e hora locais."
+    },
+    "network": {
+      "title": "Topologia de Rede",
+      "subtitle": "WAN, LAN e parâmetros essenciais de rede."
+    },
+    "hostSelection": {
+      "title": "Identificação",
+      "subtitle": "Nome da máquina na rede."
+    },
+    "profile": {
+      "title": "Perfil",
+      "subtitle": "Carga inicial de configurações para o seu caso de uso."
+    },
+    "systemFeatures": {
+      "title": "Features de Sistema",
+      "subtitle": "Ferramentas globais, IA, virtualização."
+    },
+    "userFeatures": {
+      "title": "Features de Usuário",
+      "subtitle": "Editores, shells, temas e dev."
+    },
+    "disks": {
+      "title": "Particionamento",
+      "subtitle": "Visualização de discos com validação."
+    },
+    "users": {
+      "title": "Usuário e SSH",
+      "subtitle": "Conta administrativa, senha forte e SSH."
+    },
+    "summary": {
+      "title": "Resumo final",
+      "subtitle": "Revisão final antes de gerar o plano e iniciar a instalação."
+    },
+    "install": {
+      "title": "Instalação",
+      "subtitle": "Execução em tempo real com status, logs."
+    }
+  },
+  "nav": {
+    "next": "Próximo",
+    "back": "Voltar",
+    "install": "Em execução",
+    "toInstall": "Ir para instalação",
+    "step": "Etapa {{current}} de {{total}}",
+    "blockedNavigation": "Navegação bloqueada",
+    "applyingNetwork": "Aplicando rede…",
+    "eulaLocked": "Atalhos bloqueados na EULA",
+    "installRunningHint": "Instalação em andamento. Não desligue a VM.",
+    "networkApplyingHint": "Aplicando configuração de rede… aguarde.",
+    "eulaHint": "Avanço permitido apenas pelo botão Próximo após marcar o aceite.",
+    "readyHint": "Pronto para avançar. Navegação rápida: Alt + ← / Alt + →",
+    "prep": "Preparação",
+    "localization": "Localização",
+    "network": "Rede",
+    "system": "Sistema",
+    "storage": "Armazenamento",
+    "users": "Contas",
+    "summary": "Instalação"
+  },
+  "welcome": {
+    "title": "Bem-vindo ao Kryonix Installer",
+    "subtitle": "O Kryonix Installer guiará você pela preparação da infraestrutura. Defina sua localização antes de prosseguir.",
+    "country": "1. País / Região",
+    "language": "2. Idioma da interface",
+    "keyboard": "3. Layout de teclado",
+    "timezone": "Timezone sugerido",
+    "loading": "Carregando...",
+    "applySuggestions": "✨ Aplicar sugestões",
+    "infrastructureDetected": "Infraestrutura Existente Detectada",
+    "infrastructureDetectedDesc": "O nó {{hostname}} já opera Kryonix. Para manutenções, o Modo Restore é recomendado na etapa de discos."
+  },
+  "storage": {
+    "title": "Particionamento",
+    "subtitle": "Escolha o disco alvo e revise o plano antes de continuar.",
+    "tabs": {
+      "automatic": "Automático",
+      "manual": "Manual",
+      "lvm": "LVM",
+      "raid": "RAID"
+    },
+    "automatic": {
+      "title": "Plano automático",
+      "description": "O Kryonix criará um layout recomendado para este disco.",
+      "targetDisk": "Selecione o disco alvo",
+      "noEligible": "Nenhum disco elegível detectado para instalação.",
+      "blockedDisks": "Discos não elegíveis",
+      "blockedLabel": "Bloqueado",
+      "previewTitle": "Prévia do Particionamento",
+      "previewDesc": "O layout abaixo será aplicado automaticamente no disco",
+      "reload": "↻ Atualizar lista"
+    },
+    "manual": {
+      "title": "Particionamento manual",
+      "addPartition": "Adicionar partição",
+      "name": "Nome",
+      "size": "Tamanho",
+      "filesystem": "Sistema de arquivos",
+      "mountpoint": "Ponto de montagem",
+      "action": "Ação",
+      "remove": "Remover",
+      "empty": "Nenhuma partição configurada. Clique em Adicionar Partição.",
+      "warningTitle": "Preview configurado",
+      "warningDesc": "Execução real deste modo manual detalhado depende da versão atual do instalador backend.",
+      "disk": "Disco"
+    },
+    "lvm": {
+      "title": "LVM",
+      "volumeGroup": "Volume Group",
+      "logicalVolumes": "3. Volumes Lógicos (Logical Volumes)",
+      "physicalVolumes": "1. Discos Físicos (Physical Volumes)",
+      "vgStep": "2. Volume Group",
+      "newLV": "+ Novo LV",
+      "lvName": "Nome LV",
+      "size": "Tamanho",
+      "mountpoint": "Montagem",
+      "action": "Ação",
+      "empty": "Nenhum LV configurado.",
+      "remove": "Remover",
+      "warningTitle": "LVM Disponível como plano avançado",
+      "warningDesc": "Execução real será bloqueada até a validação backend estar 100% pronta."
+    },
+    "raid": {
+      "title": "RAID",
+      "level": "1. Nível RAID",
+      "selectDisks": "2. Selecionar Discos",
+      "effectiveCapacity": "Capacidade efetiva",
+      "faultTolerance": "Tolerância a falhas",
+      "requiresTwoDisks": "É necessário ter pelo menos 2 discos físicos elegíveis para formar um array RAID.",
+      "unavailable": "RAID indisponível",
+      "estimatedPlan": "Plano Estimado"
+    },
+    "destructive": {
+      "title": "Segurança da Operação",
+      "description": "Ao prosseguir, as partições dos discos alvo selecionados serão apagadas de forma permanente. Não será possível recuperar os dados anteriores.",
+      "confirm": "Entendo que os discos serão formatados."
+    },
+    "plan": {
+      "title": "Plano de Instalação",
+      "empty": "Nenhum disco configurado.",
+      "mode": "Modo de Operação",
+      "targets": "Alvos Afetados",
+      "capacity": "Capacidade Total",
+      "detecting": "Detectando armazenamento..."
+    }
+  },
+  "users": {
+    "ssh": {
+      "title": "Acesso SSH",
+      "desc": "Configure chaves públicas para acesso sem senha.",
+      "summary": "Chaves SSH",
+      "activeKeys": "chave(s) ativas",
+      "editKeys": "EDITAR",
+      "hideKeys": "OCULTAR",
+      "addKey": "Adicionar chave",
+      "instructions": "Insira uma chave pública por linha. Elas serão instaladas no sistema final.",
+      "empty": "Nenhuma chave informada."
+    },
+    "account": {
+      "user": "Usuário",
+      "fullName": "Nome completo",
+      "fullNamePlaceholder": "Ex: RAGton Administrator",
+      "email": "E-mail",
+      "password": "Senha",
+      "passwordConfirm": "Confirmar senha",
+      "passwordStrength": "Força da senha",
+      "strengthWeak": "fraca",
+      "strengthMedium": "média",
+      "strengthStrong": "forte",
+      "allowWeakTitle": "Permitir senha fraca / modo laboratório",
+      "allowWeakDesc": "Não recomendado para uso real. Use apenas em VM, laboratório ou teste rápido. Senha vazia continua bloqueada; a confirmação ainda precisa bater."
+    }
+  }
+}

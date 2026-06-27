@@ -137,18 +137,27 @@ function formatAjvErrors(errors) {
 
 export function buildInstallPlanPayload(draftInput) {
   const draft = createInstallPlanDraft(draftInput);
-  const diskProfile = sanitizeString(draft.diskProfile);
+  const storageMode = sanitizeString(draft.storageMode) || 'automatic';
+  const diskProfile = storageMode === 'automatic' ? (sanitizeString(draft.diskProfile) || 'single') : storageMode;
   const requestedDiskMode = sanitizeString(draft.diskMode) === 'two' ? 'two' : 'one';
   const sysDisk = sanitizeString(draft.sysDisk);
   const dataDiskCandidate = sanitizeString(draft.dataDisk);
-  const raidMembers = uniqueStrings(draft.selectedDisks);
-  const diskMode = (diskProfile === 'raid' || diskProfile === 'manual') ? 'one' : requestedDiskMode;
+  
+  // Para RAID, os discos vêm do raidPlan se disponível
+  const raidMembers = storageMode === 'raid' && draft.raidPlan?.devices ? draft.raidPlan.devices : uniqueStrings(draft.selectedDisks);
+  
+  // Para LVM, os discos vêm do lvmPlan
+  const lvmMembers = storageMode === 'lvm' && draft.lvmPlan?.physicalVolumes ? draft.lvmPlan.physicalVolumes : [];
+
+  const diskMode = (diskProfile === 'raid' || diskProfile === 'manual' || diskProfile === 'lvm') ? 'one' : requestedDiskMode;
 
   const selectedDisks = diskProfile === 'raid'
-    ? uniqueStrings([sysDisk, ...raidMembers].filter(Boolean))
+    ? uniqueStrings(raidMembers.length > 0 ? raidMembers : [sysDisk])
     : diskProfile === 'manual'
       ? uniqueStrings([sysDisk, ...(draft.manualPartitions || []).map(p => p.device)].filter(Boolean))
-      : uniqueStrings([sysDisk, ...(diskMode === 'two' ? [dataDiskCandidate] : [])].filter(Boolean));
+      : diskProfile === 'lvm'
+        ? uniqueStrings(lvmMembers.length > 0 ? lvmMembers : [sysDisk])
+        : uniqueStrings([sysDisk, ...(diskMode === 'two' ? [dataDiskCandidate] : [])].filter(Boolean));
 
   const dataDisk = diskProfile === 'single' && diskMode === 'two' ? dataDiskCandidate || undefined : undefined;
   const mgmtPrefix = netmaskToPrefix(draft.mgmtNetmask) ?? 0;
@@ -224,7 +233,7 @@ export function buildInstallPlanPayload(draftInput) {
     },
     features,
     storage: {
-      layout: (diskProfile === 'raid' || diskProfile === 'manual' || diskMode === 'one') ? 'btrfs-simple' : 'btrfs-split',
+      layout: (diskProfile === 'raid' || diskProfile === 'manual' || diskProfile === 'lvm' || diskMode === 'one') ? 'btrfs-simple' : 'btrfs-split',
       target: selectedDisks[0] || '',
       enableSrvData,
       srvDataMode: enableSrvData ? 'btrfs-subvolume' : 'disabled',
@@ -239,17 +248,17 @@ export function buildInstallPlanPayload(draftInput) {
     },
     disk: {
       mode: diskMode,
-      profile: (diskProfile === 'raid' || diskProfile === 'manual') ? diskProfile : 'single',
+      profile: (diskProfile === 'raid' || diskProfile === 'manual' || diskProfile === 'lvm') ? diskProfile : 'single',
       selectedDisks,
-      raidLevel: diskProfile === 'raid' ? sanitizeString(draft.raidLevel) || 'raid1' : undefined,
+      raidLevel: diskProfile === 'raid' ? sanitizeString(draft.raidPlan?.level || draft.raidLevel) || 'raid1' : undefined,
       luksEnabled: Boolean(draft.luksEnabled),
       sysDisk,
-      dataDisk: diskMode === 'two' && diskProfile !== 'raid' && diskProfile !== 'manual' ? dataDisk : undefined,
+      dataDisk: diskMode === 'two' && diskProfile !== 'raid' && diskProfile !== 'manual' && diskProfile !== 'lvm' ? dataDisk : undefined,
       manualPartitions: diskProfile === 'manual' ? (draft.manualPartitions || []) : undefined,
-      rootFs: (diskProfile === 'raid' || diskProfile === 'manual' || diskMode === 'one')
+      rootFs: (diskProfile === 'raid' || diskProfile === 'manual' || diskProfile === 'lvm' || diskMode === 'one')
         ? 'btrfs'
         : sanitizeString(draft.rootFs) || 'btrfs',
-      dataFs: (diskProfile === 'raid' || diskProfile === 'manual')
+      dataFs: (diskProfile === 'raid' || diskProfile === 'manual' || diskProfile === 'lvm')
         ? 'btrfs'
         : diskMode === 'two'
           ? sanitizeString(draft.dataFs) || 'btrfs'
@@ -277,10 +286,10 @@ export function buildInstallPlanPayload(draftInput) {
       },
     },
     locale: {
-      country: sanitizeString(draft.country).toUpperCase(),
-      timezone: sanitizeString(draft.timeZone),
-      locale: sanitizeString(draft.locale),
-      keymap: sanitizeString(draft.keyMap),
+      country: sanitizeString(draft.country) || 'BR',
+      timezone: sanitizeString(draft.timeZone) || 'America/Cuiaba',
+      locale: sanitizeString(draft.systemLocale) || 'pt_BR.UTF-8',
+      keymap: sanitizeString(draft.consoleKeymap) || 'br-abnt2',
     },
     admin: {
       user: sanitizeString(draft.adminUser),
@@ -517,12 +526,10 @@ export function validateStep(stepId, draftInput, uiInput = {}) {
       }
 
       if (payload.disk.profile === 'raid') {
-        const minByLevel = {
-          raid0: 2,
-          raid1: 2,
-          raid5: 3,
-          raid10: 4,
-        };
+        // Bloqueio do RAID porque é um preview (ainda não suportado integralmente no backend)
+        addBlockingIssue(result, 'Este modo ainda requer suporte do executor backend para instalação real.');
+
+        const minByLevel = { raid0: 2, raid1: 2, raid5: 3, raid10: 4 };
         const minRequired = minByLevel[payload.disk.raidLevel] || 2;
         if (selectedDisks.length < minRequired) {
           addFieldError(result, 'selectedDisks', `${String(payload.disk.raidLevel || 'RAID').toUpperCase()} exige pelo menos ${minRequired} discos físicos.`);
@@ -530,15 +537,20 @@ export function validateStep(stepId, draftInput, uiInput = {}) {
         if (payload.disk.raidLevel === 'raid10' && selectedDisks.length % 2 !== 0) {
           addFieldError(result, 'selectedDisks', 'RAID 10 exige quantidade par de discos.');
         }
-        if (payload.disk.dataDisk) {
-          addFieldError(result, 'dataDisk', 'RAID não usa disk.dataDisk no contrato atual.');
-        }
       } else if (payload.disk.profile === 'manual') {
+        addBlockingIssue(result, 'Este modo ainda requer suporte do executor backend para instalação real.');
+        
         const manual = payload.disk.manualPartitions || [];
         const hasRoot = manual.some(p => p.mountpoint === '/');
         const hasEfi = manual.some(p => p.mountpoint === '/boot/efi' || p.mountpoint === '/efi');
         if (!hasRoot) addBlockingIssue(result, 'Partição raiz (/) é obrigatória no modo manual.');
         if (!hasEfi) addBlockingIssue(result, 'Partição EFI (/boot/efi ou /efi) é obrigatória.');
+      } else if (payload.disk.profile === 'lvm') {
+        addBlockingIssue(result, 'Este modo ainda requer suporte do executor backend para instalação real.');
+        
+        if (!draft.lvmPlan?.vgName) addFieldError(result, 'lvmPlan.vgName', 'Informe o nome do Volume Group.');
+        const lvs = draft.lvmPlan?.logicalVolumes || [];
+        if (!lvs.some(lv => lv.mountpoint === '/')) addBlockingIssue(result, 'Volume Lógico raiz (/) é obrigatório.');
       } else if (payload.disk.mode === 'two') {
         if (selectedDisks.length !== 2) {
           addFieldError(result, 'selectedDisks', 'O layout split exige exatamente 2 discos distintos.');

@@ -1,9 +1,9 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import Layout from './components/Layout.jsx';
 import FooterFixed from './components/FooterFixed.jsx';
 import Welcome from './pages/Welcome.jsx';
 import Eula from './pages/Eula.jsx';
-import Localization from './pages/Localization.jsx';
 import Timezone from './pages/Timezone.jsx';
 import Network from './pages/Network.jsx';
 import Source from './pages/Source.jsx';
@@ -56,86 +56,29 @@ function netmaskToPrefix(netmask) {
 }
 
 const STEPS = [
-  {
-    id: 'welcome',
-    title: 'Kryonix Installer',
-    subtitle: 'Fluxo imersivo, fullscreen, sem rolagem global e com foco em robustez operacional.',
-  },
-  {
-    id: 'eula',
-    title: 'EULA e Avisos',
-    subtitle: 'Aceite explícito antes de qualquer ação destrutiva ou configuração do sistema.',
-  },
-  {
-    id: 'source',
-    title: 'Fonte de Instalação',
-    subtitle: 'Offline ou repositório GitHub remoto.',
-  },
-  {
-    id: 'localization',
-    title: 'Idioma e Teclado',
-    subtitle: 'Preferências de localização para a interface do sistema.',
-  },
-  {
-    id: 'timezone',
-    title: 'Fuso Horário',
-    subtitle: 'Sincronização de data e hora locais.',
-  },
-  {
-    id: 'network',
-    title: 'Topologia de Rede',
-    subtitle: 'WAN, LAN e parâmetros essenciais de rede.',
-  },
-  {
-    id: 'hostSelection',
-    title: 'Identificação',
-    subtitle: 'Nome da máquina na rede.',
-  },
-  {
-    id: 'profile',
-    title: 'Perfil',
-    subtitle: 'Carga inicial de configurações para o seu caso de uso.',
-  },
-  {
-    id: 'systemFeatures',
-    title: 'Features de Sistema',
-    subtitle: 'Ferramentas globais, IA, virtualização e acesso remoto.',
-  },
-  {
-    id: 'userFeatures',
-    title: 'Features de Usuário',
-    subtitle: 'Editores, shells, temas e ferramentas de desenvolvimento.',
-  },
-  {
-    id: 'disks',
-    title: 'Particionamento',
-    subtitle: 'Visualização técnica de discos com validação alinhada ao contrato canônico.',
-  },
-  {
-    id: 'users',
-    title: 'Usuário e SSH',
-    subtitle: 'Conta administrativa, senha forte e chaves SSH autorizadas.',
-  },
-  {
-    id: 'summary',
-    title: 'Resumo final',
-    subtitle: 'Revisão final antes de gerar o plano e iniciar a instalação.',
-  },
-  {
-    id: 'install',
-    title: 'Instalação',
-    subtitle: 'Execução em tempo real com status, logs e resultado final.',
-  },
+  { id: 'welcome' },
+  { id: 'eula' },
+  { id: 'source' },
+  { id: 'timezone' },
+  { id: 'network' },
+  { id: 'hostSelection' },
+  { id: 'profile' },
+  { id: 'systemFeatures' },
+  { id: 'userFeatures' },
+  { id: 'disks' },
+  { id: 'users' },
+  { id: 'summary' },
+  { id: 'install' },
 ];
 
 const PHASES = [
-  { id: 'prep', title: 'Preparação', steps: ['welcome', 'eula', 'source'] },
-  { id: 'localization', title: 'Localização', steps: ['localization', 'timezone'] },
-  { id: 'network', title: 'Rede', steps: ['network', 'hostSelection'] },
-  { id: 'system', title: 'Sistema', steps: ['profile', 'systemFeatures', 'userFeatures'] },
-  { id: 'storage', title: 'Armazenamento', steps: ['disks'] },
-  { id: 'users', title: 'Contas', steps: ['users'] },
-  { id: 'summary', title: 'Instalação', steps: ['summary', 'install'] }
+  { id: 'prep', steps: ['welcome', 'eula', 'source'] },
+  { id: 'localization', steps: ['timezone'] },
+  { id: 'network', steps: ['network', 'hostSelection'] },
+  { id: 'system', steps: ['profile', 'systemFeatures', 'userFeatures'] },
+  { id: 'storage', steps: ['disks'] },
+  { id: 'users', steps: ['users'] },
+  { id: 'summary', steps: ['summary', 'install'] }
 ];
 
 function getInitialWizardState() {
@@ -149,6 +92,7 @@ function getInitialWizardState() {
 }
 
 export default function App() {
+  const { t, i18n } = useTranslation();
   const initialState = useMemo(() => getInitialWizardState(), []);
   const [stepIndex, setStepIndex] = useState(initialState.stepIndex);
   const [wizardState, setWizardState] = useState({
@@ -177,7 +121,10 @@ export default function App() {
 
   useEffect(() => {
     writeStoredWizardState({ stepIndex, draft, uiState });
-  }, [draft, stepIndex, uiState]);
+    if (draft.uiLanguage && i18n.language !== draft.uiLanguage) {
+      i18n.changeLanguage(draft.uiLanguage);
+    }
+  }, [draft, stepIndex, uiState, i18n]);
 
   const updateWizard = useCallback((patchOrUpdater) => {
     setWizardState((previous) => {
@@ -317,6 +264,7 @@ export default function App() {
 
       return {
         ...phase,
+        title: t(`nav.${phase.id}`),
         status,
         targetStepIndex: firstStepIndex,
       };
@@ -339,8 +287,6 @@ export default function App() {
         return <Eula {...pageProps} />;
       case 'source':
         return <Source {...pageProps} />;
-      case 'localization':
-        return <Localization {...pageProps} />;
       case 'timezone':
         return <Timezone {...pageProps} />;
       case 'network':
@@ -372,12 +318,12 @@ export default function App() {
 
   return (
     <Layout
-      title={step.title}
-      subtitle={step.subtitle}
-      stepLabel={`Etapa ${stepIndex + 1} de ${STEPS.length}`}
+      title={t(`steps.${step.id}.title`)}
+      subtitle={t(`steps.${step.id}.subtitle`)}
+      stepLabel={t('nav.step', { current: stepIndex + 1, total: STEPS.length })}
       phases={phasesWithState}
       currentStepIndex={stepIndex}
-      navigationHint={uiState.installRunning ? 'Navegação bloqueada' : uiState.netApplyBusy ? 'Aplicando rede…' : eulaLocked ? 'Atalhos bloqueados na EULA' : 'Alt + ← / Alt + →'}
+      navigationHint={uiState.installRunning ? t('nav.blockedNavigation') : uiState.netApplyBusy ? t('nav.applyingNetwork') : eulaLocked ? t('nav.eulaLocked') : 'Alt + ← / Alt + →'}
       onStepJump={(index) => {
         if (uiState.installRunning) return;
         if (uiState.netApplyBusy) return;
@@ -392,26 +338,23 @@ export default function App() {
       }}
       footer={(
         <FooterFixed
-          progressLabel={`${step.title} • ${progressValue}%`}
+          progressLabel={`${t(`steps.${step.id}.title`)} • ${progressValue}%`}
           progressValue={progressValue}
           issues={footerIssues}
           canBack={stepIndex > 0 && !uiState.installRunning && !uiState.netApplyBusy}
           canNext={step.id === 'install' ? false : canGoNext && !uiState.installRunning && !uiState.netApplyBusy}
           onBack={() => setStepIndex((previous) => Math.max(0, previous - 1))}
-          // advanceWizardSafely centraliza avanço: no step network chama
-          // /network/apply via handleNetworkNext; nos demais passos delega
-          // para goNext, mantendo paridade com o comportamento antigo.
           onNext={advanceWizardSafely}
           hintText={
             uiState.installRunning
-              ? 'Instalação em andamento. Não desligue a VM.'
+              ? t('nav.installRunningHint')
               : uiState.netApplyBusy
-                ? 'Aplicando configuração de rede… aguarde.'
+                ? t('nav.networkApplyingHint')
               : step.id === 'eula'
-                ? 'Nesta etapa, o avanço só é permitido pelo botão Próximo após marcar o aceite.'
-                : 'Pronto para avançar. Navegação rápida: Alt + ← / Alt + →'
+                ? t('nav.eulaHint')
+                : t('nav.readyHint')
           }
-          nextLabel={step.id === 'summary' ? 'Ir para instalação' : step.id === 'install' ? 'Em execução' : 'Próximo'}
+          nextLabel={step.id === 'summary' ? t('nav.toInstall') : step.id === 'install' ? t('nav.install') : t('nav.next')}
         />
       )}
     >

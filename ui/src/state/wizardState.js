@@ -7,9 +7,12 @@ export const DRAFT_FIELD_NAMES = [
   'profileId',
   'selectedFeatures',
   'targetRemoteAccessEnabled',
+  'uiLanguage',
+  'systemLocale',
   'country',
-  'locale',
-  'keyMap',
+  'keyboardLayout',
+  'keyboardVariant',
+  'consoleKeymap',
   'timeZone',
   'hostName',
   'mgmtInterface',
@@ -44,6 +47,9 @@ export const DRAFT_FIELD_NAMES = [
   'adminPasswordConfirm',
   'allowWeakPassword',
   'adminAuthorizedKeys',
+  'storageMode',
+  'lvmPlan',
+  'raidPlan',
 ];
 
 export const UI_TRANSIENT_FIELD_NAMES = [
@@ -77,9 +83,12 @@ export const INITIAL_INSTALL_PLAN_DRAFT = {
   profileId: 'desktop',
   selectedFeatures: [],
   targetRemoteAccessEnabled: false,
+  uiLanguage: 'pt-BR',
+  systemLocale: 'pt_BR.UTF-8',
   country: 'BR',
-  locale: 'pt_BR.UTF-8',
-  keyMap: 'br-abnt2',
+  keyboardLayout: 'br',
+  keyboardVariant: 'abnt2',
+  consoleKeymap: 'br-abnt2',
   timeZone: 'America/Cuiaba',
   hostName: 'kryonix-e2e',
   mgmtInterface: '',
@@ -114,6 +123,18 @@ export const INITIAL_INSTALL_PLAN_DRAFT = {
   adminPasswordConfirm: '',
   allowWeakPassword: false,
   adminAuthorizedKeys: '',
+  storageMode: 'automatic',
+  lvmPlan: {
+    vgName: 'kryonix-vg',
+    physicalVolumes: [],
+    logicalVolumes: [],
+  },
+  raidPlan: {
+    level: 'raid1',
+    devices: [],
+    filesystem: 'btrfs',
+    mountpoint: '/',
+  },
 };
 
 export const INITIAL_UI_TRANSIENT_STATE = {

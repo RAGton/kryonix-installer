@@ -1,0 +1,190 @@
+{
+  "steps": {
+    "welcome": {
+      "title": "Kryonix Installer",
+      "subtitle": "Initial environment configuration."
+    },
+    "eula": {
+      "title": "EULA and Notices",
+      "subtitle": "Explicit agreement before any destructive action."
+    },
+    "source": {
+      "title": "Installation Source",
+      "subtitle": "Offline or remote GitHub repository."
+    },
+    "timezone": {
+      "title": "Time Zone",
+      "subtitle": "Local date and time synchronization."
+    },
+    "network": {
+      "title": "Network Topology",
+      "subtitle": "WAN, LAN, and essential network parameters."
+    },
+    "hostSelection": {
+      "title": "Identification",
+      "subtitle": "Machine name on the network."
+    },
+    "profile": {
+      "title": "Profile",
+      "subtitle": "Initial settings load for your use case."
+    },
+    "systemFeatures": {
+      "title": "System Features",
+      "subtitle": "Global tools, AI, virtualization."
+    },
+    "userFeatures": {
+      "title": "User Features",
+      "subtitle": "Editors, shells, themes, and dev."
+    },
+    "disks": {
+      "title": "Partitioning",
+      "subtitle": "Technical disk view with validation."
+    },
+    "users": {
+      "title": "User and SSH",
+      "subtitle": "Admin account, strong password, and SSH."
+    },
+    "summary": {
+      "title": "Final Summary",
+      "subtitle": "Final review before generating the plan and starting installation."
+    },
+    "install": {
+      "title": "Installation",
+      "subtitle": "Real-time execution with status and logs."
+    }
+  },
+  "nav": {
+    "next": "Next",
+    "back": "Back",
+    "install": "Running",
+    "toInstall": "Go to Installation",
+    "step": "Step {{current}} of {{total}}",
+    "blockedNavigation": "Navigation blocked",
+    "applyingNetwork": "Applying network…",
+    "eulaLocked": "Shortcuts blocked on EULA",
+    "installRunningHint": "Installation in progress. Do not turn off the VM.",
+    "networkApplyingHint": "Applying network configuration… please wait.",
+    "eulaHint": "Advancing is only allowed via the Next button after checking the agreement.",
+    "readyHint": "Ready to advance. Quick navigation: Alt + ← / Alt + →",
+    "prep": "Preparation",
+    "localization": "Localization",
+    "network": "Network",
+    "system": "System",
+    "storage": "Storage",
+    "users": "Accounts",
+    "summary": "Installation"
+  },
+  "welcome": {
+    "title": "Welcome to Kryonix Installer",
+    "subtitle": "The Kryonix Installer will guide you through infrastructure preparation. Set your localization before proceeding.",
+    "country": "1. Country / Region",
+    "language": "2. Interface Language",
+    "keyboard": "3. Keyboard Layout",
+    "timezone": "Suggested Timezone",
+    "loading": "Loading...",
+    "applySuggestions": "✨ Apply suggestions",
+    "infrastructureDetected": "Existing Infrastructure Detected",
+    "infrastructureDetectedDesc": "Node {{hostname}} is already running Kryonix. For maintenance, Restore Mode is recommended in the disks step."
+  },
+  "storage": {
+    "title": "Partitioning",
+    "subtitle": "Choose target disk and review the plan before continuing.",
+    "tabs": {
+      "automatic": "Automatic",
+      "manual": "Manual",
+      "lvm": "LVM",
+      "raid": "RAID"
+    },
+    "automatic": {
+      "title": "Automatic plan",
+      "description": "Kryonix will create a recommended layout for this disk.",
+      "targetDisk": "Select target disk",
+      "noEligible": "No eligible disks detected for installation.",
+      "blockedDisks": "Ineligible disks",
+      "blockedLabel": "Blocked",
+      "previewTitle": "Partitioning Preview",
+      "previewDesc": "The following layout will be automatically applied to disk",
+      "reload": "↻ Reload list"
+    },
+    "manual": {
+      "title": "Manual partitioning",
+      "addPartition": "Add partition",
+      "name": "Name",
+      "size": "Size",
+      "filesystem": "Filesystem",
+      "mountpoint": "Mountpoint",
+      "action": "Action",
+      "remove": "Remove",
+      "empty": "No partitions configured. Click Add Partition.",
+      "warningTitle": "Preview configured",
+      "warningDesc": "Real execution of this manual mode depends on current backend installer version.",
+      "disk": "Disk"
+    },
+    "lvm": {
+      "title": "LVM",
+      "volumeGroup": "Volume Group",
+      "logicalVolumes": "3. Logical Volumes",
+      "physicalVolumes": "1. Physical Volumes",
+      "vgStep": "2. Volume Group",
+      "newLV": "+ New LV",
+      "lvName": "LV Name",
+      "size": "Size",
+      "mountpoint": "Mount",
+      "action": "Action",
+      "empty": "No LVs configured.",
+      "remove": "Remove",
+      "warningTitle": "LVM available as advanced plan",
+      "warningDesc": "Real execution will be blocked until backend validation is 100% ready."
+    },
+    "raid": {
+      "title": "RAID",
+      "level": "1. RAID Level",
+      "selectDisks": "2. Select Disks",
+      "effectiveCapacity": "Effective capacity",
+      "faultTolerance": "Fault tolerance",
+      "requiresTwoDisks": "At least 2 eligible physical disks are required to form a RAID array.",
+      "unavailable": "RAID unavailable",
+      "estimatedPlan": "Estimated Plan"
+    },
+    "destructive": {
+      "title": "Operation Security",
+      "description": "By proceeding, the partitions of the selected target disks will be permanently erased. Previous data cannot be recovered.",
+      "confirm": "I understand that the disks will be formatted."
+    },
+    "plan": {
+      "title": "Installation Plan",
+      "empty": "No disk configured.",
+      "mode": "Operation Mode",
+      "targets": "Affected Targets",
+      "capacity": "Total Capacity",
+      "detecting": "Detecting storage..."
+    }
+  },
+  "users": {
+    "ssh": {
+      "title": "SSH Access",
+      "desc": "Configure public keys for passwordless access.",
+      "summary": "SSH Keys",
+      "activeKeys": "active key(s)",
+      "editKeys": "EDIT",
+      "hideKeys": "HIDE",
+      "addKey": "Add key",
+      "instructions": "Enter one public key per line. They will be installed in the final system.",
+      "empty": "No keys provided."
+    },
+    "account": {
+      "user": "Username",
+      "fullName": "Full name",
+      "fullNamePlaceholder": "E.g. RAGton Administrator",
+      "email": "Email",
+      "password": "Password",
+      "passwordConfirm": "Confirm password",
+      "passwordStrength": "Password strength",
+      "strengthWeak": "weak",
+      "strengthMedium": "medium",
+      "strengthStrong": "strong",
+      "allowWeakTitle": "Allow weak password / lab mode",
+      "allowWeakDesc": "Not recommended for actual use. Only use in VM, lab, or quick testing. Empty password remains blocked; confirmation still needs to match."
+    }
+  }
+}
