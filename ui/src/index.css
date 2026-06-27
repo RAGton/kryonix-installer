@@ -5,21 +5,35 @@
 /* ── HUD Design System ─────────────────────────────────────────────────── */
 
 :root {
-  --bg: #0B0F19;
-  --bg2: #111827;
-  --bg3: rgba(17, 24, 39, 0.65);
-  --bg4: #1F2937;
-  --border: #1F2937;
-  --border2: #374151;
-  --primary: #3B82F6;
-  --secondary: #06B6D4;
-  --accent: #3B82F6;
-  --text: #F9FAFB;
-  --text2: #9CA3AF;
-  --text3: #4B5563;
-  --success: #10B981;
-  --danger: #EF4444;
-  --warning: #F59E0B;
+  --kx-bg: #f4f7fb;
+  --kx-surface: rgba(255, 255, 255, 0.84);
+  --kx-surface-elevated: #ffffff;
+  --kx-border: rgba(15, 23, 42, 0.10);
+  --kx-text: #0f172a;
+  --kx-text-secondary: #475569;
+  --kx-muted: #64748b;
+  --kx-primary: #2563eb;
+  --kx-primary-soft: rgba(37, 99, 235, 0.10);
+  --kx-success: #16a34a;
+  --kx-warning: #d97706;
+  --kx-danger: #dc2626;
+
+  /* Legacy variables for compatibility with unrefactored components */
+  --bg: var(--kx-bg);
+  --bg2: var(--kx-surface-elevated);
+  --bg3: var(--kx-surface);
+  --bg4: var(--kx-surface-elevated);
+  --border: var(--kx-border);
+  --border2: var(--kx-border);
+  --primary: var(--kx-primary);
+  --secondary: var(--kx-primary);
+  --accent: var(--kx-primary);
+  --text: var(--kx-text);
+  --text2: var(--kx-text-secondary);
+  --text3: var(--kx-muted);
+  --success: var(--kx-success);
+  --danger: var(--kx-danger);
+  --warning: var(--kx-warning);
   
   --term-bg: #000000;
   --term-bg-soft: #111827;
@@ -31,6 +45,21 @@
   --rlg: 16px;
   --font: 'Inter', system-ui, sans-serif;
   --font-mono: 'JetBrains Mono', 'Fira Code', monospace;
+}
+
+.dark {
+  --kx-bg: #08111f;
+  --kx-surface: rgba(13, 23, 40, 0.78);
+  --kx-surface-elevated: #111c31;
+  --kx-border: rgba(148, 163, 184, 0.14);
+  --kx-text: #f3f7fb;
+  --kx-text-secondary: #a8b3c7;
+  --kx-muted: #7b879c;
+  --kx-primary: #3b82f6;
+  --kx-primary-soft: rgba(59, 130, 246, 0.13);
+  --kx-success: #22c55e;
+  --kx-warning: #f59e0b;
+  --kx-danger: #ef4444;
 }
 
 *, *::before, *::after { box-sizing: border-box; }
