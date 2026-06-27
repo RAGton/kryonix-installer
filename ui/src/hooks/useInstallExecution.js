@@ -184,6 +184,7 @@ export function useInstallExecution({ draft, uiState }) {
         ...previous,
         phase: INSTALL_EXECUTION_PHASES.FAILED,
         globalError: getInstallerApiErrorMessage(error, 'Erro ao iniciar a instalacao.'),
+        rawError: error?.body || error,
         streamConnected: false,
       }));
       return false;

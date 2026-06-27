@@ -1,4 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
+import ErrorDiagnosisPanel from '../components/ErrorDiagnosisPanel.jsx';
+import AdvancedLogsDrawer from '../components/AdvancedLogsDrawer.jsx';
 import { useInstallExecution } from '../hooks/useInstallExecution.js';
 import {
   buildInstallStageList,
@@ -236,33 +238,18 @@ export default function Install({ draft, uiState, validation, onChange }) {
         </div>
       </section>
 
-      <section className="flex min-h-0 flex-col overflow-hidden rounded-3xl border border-emerald-400/20 bg-[var(--term-bg-soft)] shadow-[0_0_0_1px_rgba(16,185,129,0.08)]">
-        <div className="flex items-center justify-between gap-4 border-b border-emerald-400/10 px-5 py-4">
-          <div>
-            <div className="text-xs font-semibold uppercase tracking-[0.28em] text-emerald-400/80">Terminal de instalacao</div>
-            <h3 className="mt-1 text-lg font-bold text-emerald-100">Fase: {formatRuntimePhaseLabel(runtimePhase)}</h3>
-            <div className="mt-1 text-xs text-slate-500">
-              Ultima linha util: {executionState.status.lastLogLine || '-'}
-            </div>
-          </div>
-          <div className="rounded-full border border-emerald-400/20 px-3 py-1 text-xs font-semibold uppercase tracking-[0.2em] text-emerald-300">
-            {phase}
-          </div>
-        </div>
-
-        {finalFailure ? (
-          <div className="border-b border-rose-400/10 bg-rose-400/10 px-5 py-3 text-sm text-rose-100">
-            <span className="font-semibold text-rose-50">Causa concreta:</span> {finalFailure}
-          </div>
+      <section className="flex min-h-0 flex-col overflow-hidden">
+        {executionState.rawError ? (
+          <ErrorDiagnosisPanel errorPayload={executionState.rawError} />
         ) : null}
 
-        <pre
-          ref={logRef}
-          onScroll={handleLogScroll}
-          className="min-h-[240px] max-h-[420px] flex-1 overflow-auto whitespace-pre-wrap break-words font-mono bg-[var(--term-bg)] px-5 py-4 text-xs leading-6 text-[var(--term-fg)]"
-        >
-          {executionState.logTail}
-        </pre>
+        <div className="flex-1 mt-4 relative min-h-0">
+          <AdvancedLogsDrawer 
+            logs={executionState.logTail} 
+            autoScroll={stickToBottomRef.current} 
+            className="absolute bottom-0 w-full"
+          />
+        </div>
       </section>
 
       {showSafetyModal && (

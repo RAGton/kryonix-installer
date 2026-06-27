@@ -14,7 +14,8 @@
     "disk",
     "network",
     "locale",
-    "admin"
+    "admin",
+    "appearance"
   ],
   "properties": {
     "version": {
@@ -281,6 +282,18 @@
           "minItems": 0,
           "uniqueItems": true
         }
+      }
+    },
+    "appearance": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["installerTheme", "desktopThemeMode", "accent", "plasmaPreset", "sddmPreset"],
+      "properties": {
+        "installerTheme": { "type": "string", "enum": ["light", "dark"] },
+        "desktopThemeMode": { "type": "string", "enum": ["light", "dark", "system"] },
+        "accent": { "type": "string" },
+        "plasmaPreset": { "type": "string" },
+        "sddmPreset": { "type": "string" }
       }
     }
   },

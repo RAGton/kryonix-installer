@@ -116,6 +116,15 @@ const STEPS = [
   },
 ];
 
+const PHASES = [
+  { id: 'prep', title: 'Preparação', steps: ['welcome', 'eula', 'source'] },
+  { id: 'network', title: 'Rede', steps: ['network', 'hostSelection'] },
+  { id: 'system', title: 'Sistema', steps: ['profile', 'systemFeatures', 'userFeatures'] },
+  { id: 'storage', title: 'Armazenamento', steps: ['disks'] },
+  { id: 'users', title: 'Contas', steps: ['users'] },
+  { id: 'summary', title: 'Instalação', steps: ['summary', 'install'] }
+];
+
 function getInitialWizardState() {
   const stored = readStoredWizardState();
 
@@ -282,13 +291,24 @@ export default function App() {
     }
   }, [stepIndex]);
 
-  const stepsWithState = useMemo(
-    () => STEPS.map((item, index) => ({
-      ...item,
-      status: index < stepIndex ? 'done' : index === stepIndex ? 'current' : 'upcoming',
-    })),
-    [stepIndex],
-  );
+  const phasesWithState = useMemo(() => {
+    return PHASES.map((phase, pIndex) => {
+      // Find the index of the first step in this phase
+      const firstStepIndex = STEPS.findIndex(s => s.id === phase.steps[0]);
+      // Find the index of the last step in this phase
+      const lastStepIndex = STEPS.findIndex(s => s.id === phase.steps[phase.steps.length - 1]);
+      
+      let status = 'upcoming';
+      if (stepIndex > lastStepIndex) status = 'done';
+      else if (stepIndex >= firstStepIndex && stepIndex <= lastStepIndex) status = 'current';
+
+      return {
+        ...phase,
+        status,
+        targetStepIndex: firstStepIndex,
+      };
+    });
+  }, [stepIndex]);
 
   const pageProps = {
     draft,
@@ -301,7 +321,7 @@ export default function App() {
   const currentPage = (() => {
     switch (step.id) {
       case 'welcome':
-        return <Welcome />;
+        return <Welcome {...pageProps} />;
       case 'eula':
         return <Eula {...pageProps} />;
       case 'network':
@@ -331,12 +351,22 @@ export default function App() {
     }
   })();
 
+  // Aplicar tema escuro/claro no html base
+  useEffect(() => {
+    const root = window.document.documentElement;
+    if (draft.installerUiTheme === 'light') {
+      root.classList.remove('dark');
+    } else {
+      root.classList.add('dark');
+    }
+  }, [draft.installerUiTheme]);
+
   return (
     <Layout
       title={step.title}
       subtitle={step.subtitle}
       stepLabel={`Etapa ${stepIndex + 1} de ${STEPS.length}`}
-      steps={stepsWithState}
+      phases={phasesWithState}
       currentStepIndex={stepIndex}
       navigationHint={uiState.installRunning ? 'Navegação bloqueada' : uiState.netApplyBusy ? 'Aplicando rede…' : eulaLocked ? 'Atalhos bloqueados na EULA' : 'Alt + ← / Alt + →'}
       onStepJump={(index) => {

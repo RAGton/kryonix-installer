@@ -108,6 +108,8 @@ function buildKryonixInstallPlan(planPayload, secretsPayload = {}, mode = 'insta
   };
 }
 
+import { installerApiMock } from './installerApiMock.js';
+
 // Maps ProgressEvent.step → INSTALL_RUNTIME_PHASE label
 const STEP_TO_PHASE = {
   precheck: 'INPUT',
@@ -119,7 +121,7 @@ const STEP_TO_PHASE = {
   error: 'ERROR',
 };
 
-export const installerApi = {
+const realInstallerApi = {
   getCountries() { return Promise.resolve([{ id: 'BR', name: 'Brasil' }]); },
   getLocales() { return Promise.resolve([{ id: 'pt_BR.UTF-8', name: 'Portugues (Brasil)' }]); },
   getKeymaps() { return Promise.resolve([{ id: 'br-abnt2', name: 'Portugues (ABNT2)' }]); },
@@ -300,6 +302,10 @@ export const installerApi = {
     return () => source.close();
   },
 };
+
+export const installerApi = import.meta.env.VITE_INSTALLER_MOCK === '1'
+  ? installerApiMock
+  : realInstallerApi;
 
 export function getInstallerApiErrorMessage(error, fallbackMessage = 'Falha ao comunicar com o backend do instalador.') {
   if (error instanceof InstallerApiError) {

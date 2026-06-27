@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 
-export default function Welcome() {
+export default function Welcome({ draft, onChange }) {
   const [version, setVersion] = useState(null);
   const [detections, setDetections] = useState([]);
 
@@ -18,80 +18,103 @@ export default function Welcome() {
 
   const hasKryonix = detections.some(d => d.is_kryonix);
 
+  const setTheme = (mode) => {
+    onChange({
+      draftPatch: {
+        installerUiTheme: mode,
+        desktopThemeMode: mode,
+      }
+    });
+  };
+
+  const currentMode = draft?.installerUiTheme || 'dark';
+
   return (
-    <div className="grid h-full min-h-0 gap-6 lg:grid-cols-[1.15fr_0.85fr]">
-      <section className="section-panel flex min-h-0 flex-col justify-between overflow-y-auto">
-        <div>
-          <div className="metric-chip">Build focado em servidor</div>
-          <h2 className="mt-5 text-2xl font-black tracking-tight text-white">Instalador redesenhado para estabilidade operacional</h2>
+    <div className="flex flex-col items-center justify-center h-full max-w-4xl mx-auto w-full px-4 text-center animate-fade-in-up">
+      {/* Branding */}
+      <div className="mb-10 flex flex-col items-center">
+        <div className="w-20 h-20 mb-6 bg-gradient-to-br from-accent-blue to-accent-cyan rounded-2xl shadow-xl shadow-accent-blue/20 flex items-center justify-center">
+          <span className="text-4xl text-white font-bold tracking-tighter">K</span>
+        </div>
+        <h2 className="text-4xl md:text-5xl font-black tracking-tight text-slate-900 dark:text-white mb-4">
+          Bem-vindo ao Kryonix
+        </h2>
+        <p className="text-lg text-slate-500 dark:text-slate-400 max-w-xl">
+          Instalador redesenhado para estabilidade operacional e design premium. Configure seu sistema em poucos passos.
+        </p>
+      </div>
 
-          {hasKryonix && (
-            <div className="mt-6 rounded-xl border border-cyan-500/30 bg-cyan-500/5 p-4 animate-pulse">
-              <div className="flex items-center gap-2 text-cyan-400 font-bold">
-                <span className="h-2 w-2 rounded-full bg-cyan-400"></span>
-                Instalação Kryonix detectada
-              </div>
-              <p className="mt-2 text-sm text-cyan-100/70">
-                Detectamos o host <span className="text-white font-mono">{detections[0].hostname}</span> em <span className="text-white font-mono">{detections[0].device}</span>.
-                Recomendamos o <strong>Modo Restore</strong> no passo de particionamento.
-              </p>
-            </div>
-          )}
-
-          <p className="mt-4 max-w-2xl text-base leading-7 text-slate-300">
-            Esta refatoração elimina o arquivo monolítico, separa layout, footer, mapa e páginas críticas, e prepara a UI para evoluir sem travamentos.
+      {/* Detections */}
+      {hasKryonix && (
+        <div className="mb-10 w-full max-w-lg rounded-xl border border-accent-blue/30 bg-accent-blue/5 p-4 animate-pulse">
+          <div className="flex items-center justify-center gap-2 text-accent-blue dark:text-accent-blue font-bold">
+            <span className="h-2 w-2 rounded-full bg-accent-blue"></span>
+            Instalação Kryonix detectada
+          </div>
+          <p className="mt-2 text-sm text-slate-600 dark:text-slate-300">
+            Detectamos o host <span className="font-mono bg-slate-200 dark:bg-slate-800 px-1 rounded">{detections[0].hostname}</span>.
+            Recomendamos o <strong>Modo Restore</strong> na etapa de particionamento.
           </p>
         </div>
+      )}
 
-        <div className="grid gap-4 md:grid-cols-3">
-          <div className="section-panel bg-white/5">
-            <div className="text-sm font-bold text-white">Layout imersivo</div>
-            <p className="mt-2 text-sm text-slate-400">100vh/100vw, sem rolagem global e com glassmorphism controlado.</p>
-          </div>
-          <div className="section-panel bg-white/5">
-            <div className="text-sm font-bold text-white">Mapa refinado</div>
-            <p className="mt-2 text-sm text-slate-400">Timezone com regiões úteis, menos ruído visual e seleção mais clara.</p>
-          </div>
-          <div className="section-panel bg-white/5">
-            <div className="text-sm font-bold text-white">Discos sem freeze</div>
-            <p className="mt-2 text-sm text-slate-400">Cálculos pesados de partições saem do render e passam a usar memoização explícita.</p>
-          </div>
+      {/* Theme Selection */}
+      <div className="w-full max-w-2xl mb-12">
+        <h3 className="text-sm font-semibold text-slate-400 dark:text-slate-500 uppercase tracking-wider mb-4">Aparência do Sistema</h3>
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+          {/* Light Mode Card */}
+          <button
+            type="button"
+            onClick={() => setTheme('light')}
+            className={`flex flex-col items-center p-6 rounded-2xl border-2 transition-all duration-200 ${
+              currentMode === 'light'
+                ? 'border-accent-blue bg-white shadow-lg ring-4 ring-accent-blue/10 dark:bg-slate-800'
+                : 'border-slate-200 bg-slate-50 hover:border-slate-300 dark:border-border dark:bg-bg-elevated dark:hover:border-slate-600'
+            }`}
+          >
+            <div className="w-full h-24 mb-4 rounded-lg bg-slate-100 border border-slate-200 flex flex-col p-2 gap-1.5 overflow-hidden">
+              <div className="h-3 w-full bg-white rounded shadow-sm border border-slate-100"></div>
+              <div className="flex gap-1.5 flex-1">
+                <div className="w-1/4 h-full bg-white rounded shadow-sm border border-slate-100"></div>
+                <div className="flex-1 h-full bg-white rounded shadow-sm border border-slate-100 p-1">
+                  <div className="w-1/2 h-2 bg-accent-blue/20 rounded"></div>
+                </div>
+              </div>
+            </div>
+            <span className="font-bold text-slate-900 dark:text-white">Claro</span>
+            <span className="text-xs text-slate-500 mt-1">Gelo e azul discreto</span>
+          </button>
+
+          {/* Dark Mode Card */}
+          <button
+            type="button"
+            onClick={() => setTheme('dark')}
+            className={`flex flex-col items-center p-6 rounded-2xl border-2 transition-all duration-200 ${
+              currentMode === 'dark'
+                ? 'border-accent-blue bg-white shadow-lg ring-4 ring-accent-blue/10 dark:bg-slate-800/80 dark:shadow-[0_0_30px_rgba(59,130,246,0.15)]'
+                : 'border-slate-200 bg-slate-50 hover:border-slate-300 dark:border-border dark:bg-bg-elevated dark:hover:border-slate-600'
+            }`}
+          >
+            <div className="w-full h-24 mb-4 rounded-lg bg-slate-900 border border-slate-700 flex flex-col p-2 gap-1.5 overflow-hidden shadow-inner">
+              <div className="h-3 w-full bg-slate-800 rounded border border-slate-700/50"></div>
+              <div className="flex gap-1.5 flex-1">
+                <div className="w-1/4 h-full bg-slate-800 rounded border border-slate-700/50"></div>
+                <div className="flex-1 h-full bg-slate-800/80 backdrop-blur-sm rounded border border-slate-700/50 p-1 shadow-glass">
+                  <div className="w-1/2 h-2 bg-accent-blue/40 rounded"></div>
+                </div>
+              </div>
+            </div>
+            <span className="font-bold text-slate-900 dark:text-white">Escuro</span>
+            <span className="text-xs text-slate-500 mt-1">Blue glass premium (Padrão)</span>
+          </button>
         </div>
+      </div>
 
-        {version && (
-          <div className="mt-6 text-[10px] text-slate-500 font-mono">
-            {version.KRYONIX_PRETTY_NAME} | {version.KRYONIX_REV?.substring(0, 8)} | {version.KRYONIX_BUILD_TIME}
-          </div>
-        )}
-      </section>
-
-      <section className="section-panel flex min-h-0 flex-col justify-center overflow-hidden">
-        <div className="mx-auto flex h-full max-h-[420px] w-full max-w-[520px] items-center justify-center">
-          <div className="w-full max-w-xl text-center">
-            <svg viewBox="0 0 200 80" className="w-full h-auto mx-auto" fill="none" xmlns="http://www.w3.org/2000/svg">
-              <defs>
-                <linearGradient id="grad" x1="0%" y1="0%" x2="100%" y2="100%">
-                  <stop offset="0%" stop-color="#22d3ee" stop-opacity="1"/>
-                  <stop offset="100%" stop-color="#a855f7" stop-opacity="1"/>
-                </linearGradient>
-              </defs>
-              <text x="50%" y="55%" dominant-baseline="middle" text-anchor="middle"
-                    font-family="system-ui, sans-serif" font-size="42" font-weight="800"
-                    fill="url(#grad)" letter-spacing="-0.02em">Kryonix</text>
-              <text x="50%" y="75%" dominant-baseline="middle" text-anchor="middle"
-                    font-family="system-ui, sans-serif" font-size="11" font-weight="500"
-                    fill="#64748b" letter-spacing="0.08em" text-transform="uppercase">Installer</text>
-              <circle cx="35" cy="25" r="12" fill="url(#grad)" opacity="0.3"/>
-              <circle cx="165" cy="55" r="8" fill="#22d3ee" opacity="0.4"/>
-              <circle cx="25" cy="65" r="6" fill="#a855f7" opacity="0.3"/>
-            </svg>
-            <p className="mt-6 text-slate-400 text-sm leading-relaxed max-w-md mx-auto">
-              Instalador redesenhado para estabilidade operacional. Fluxo imersivo,
-              validações em tempo real e geração declarativa de configuração NixOS.
-            </p>
-          </div>
+      {version && (
+        <div className="mt-auto text-[10px] text-slate-400 dark:text-slate-600 font-mono">
+          {version.KRYONIX_PRETTY_NAME} | {version.KRYONIX_REV?.substring(0, 8)} | {version.KRYONIX_BUILD_TIME}
         </div>
-      </section>
+      )}
     </div>
   );
 }

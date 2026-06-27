@@ -5,44 +5,40 @@
 /* ── HUD Design System ─────────────────────────────────────────────────── */
 
 :root {
-  --bg:       #0a0d12;
-  --bg2:      #0f1318;
-  --bg3:      #131820;
-  --bg4:      #181f28;
-  --border:   #1e2d3d;
-  --border2:  #253545;
-  --primary:  #00d4ff;
-  --secondary:#82aaff;
-  --accent:   #b48eff;
-  --text:     #cdd6f4;
-  --text2:    #7f8ea3;
-  --text3:    #45566a;
-  --success:  #a6e3a1;
-  --danger:   #f38ba8;
-  --warning:  #f9e2af;
-  /* Paleta oficial do console/terminal do instalador (verde sobre preto).
-     Deliberadamente distinta do HUD azul — referencie estes tokens em vez de
-     hex soltos (bg-[var(--term-bg)]) para eliminar o branding drift. */
-  --term-bg:      #020703;
-  --term-bg-soft: #050b06;
-  --term-fg:      #9ef7bd;
-  /* DiskVisualizer: barras de particionamento (tokenizadas, sem hex solto). */
-  --space-blue:    #1d3a5f;   /* espaço livre */
-  --disk-existing: #353d48;   /* partições já existentes (cinza) */
-  --r:        8px;
-  --rlg:      12px;
-  /* Tipografia: sans-serif para UI geral, monospace restrito a terminal/código. */
-  --font:     -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Inter', Roboto, Oxygen, Ubuntu, Cantarell, 'Helvetica Neue', sans-serif;
-  --font-mono:'JetBrains Mono', 'Fira Code', 'SF Mono', Consolas, 'Liberation Mono', Menlo, 'Courier New', monospace;
-  /* Contraste reforçado para --text2: antes #7f8ea3 (~3:1 sobre bg3), agora #a8b2c8 (~5:1) — passa WCAG AA. */
-  --text2:    #a8b2c8;
+  --bg: #0B0F19;
+  --bg2: #111827;
+  --bg3: rgba(17, 24, 39, 0.65);
+  --bg4: #1F2937;
+  --border: #1F2937;
+  --border2: #374151;
+  --primary: #3B82F6;
+  --secondary: #06B6D4;
+  --accent: #3B82F6;
+  --text: #F9FAFB;
+  --text2: #9CA3AF;
+  --text3: #4B5563;
+  --success: #10B981;
+  --danger: #EF4444;
+  --warning: #F59E0B;
+  
+  --term-bg: #000000;
+  --term-bg-soft: #111827;
+  --term-fg: #60A5FA;
+
+  --space-blue: #1E3A8A;
+  --disk-existing: #374151;
+  --r: 8px;
+  --rlg: 16px;
+  --font: 'Inter', system-ui, sans-serif;
+  --font-mono: 'JetBrains Mono', 'Fira Code', monospace;
 }
 
-/* Unlayered = prioridade sobre @layer base do Tailwind */
 *, *::before, *::after { box-sizing: border-box; }
 
 body {
   background: var(--bg);
+  background-image: radial-gradient(circle at top right, rgba(59, 130, 246, 0.15) 0%, transparent 40%),
+                    radial-gradient(circle at bottom left, rgba(6, 182, 212, 0.1) 0%, transparent 30%);
   color: var(--text);
   font-family: var(--font);
   margin: 0;
@@ -52,14 +48,12 @@ body {
   -moz-osx-font-smoothing: grayscale;
 }
 
-/* ── Shell (100vw × 100vh, flex column) ────────────────────────────────── */
-
 .shell {
   width: 100vw;
   height: 100vh;
   display: flex;
   flex-direction: column;
-  background: var(--bg);
+  background: transparent;
   overflow: hidden;
 }
 
@@ -593,7 +587,7 @@ textarea:focus-visible {
 
   /* btn-primary Tailwind permanece intacto para as páginas internas */
   .btn-primary {
-    @apply px-6 py-3 rounded-lg font-bold transition-all focus:ring-2 focus:ring-accent-400/60 bg-accent-600 text-white hover:bg-accent-500 disabled:cursor-not-allowed disabled:bg-slate-700 disabled:text-slate-400 disabled:opacity-80;
+    @apply px-6 py-3 rounded-lg font-bold transition-all focus:ring-2 focus:ring-accent-blue/60 bg-accent-blue text-white hover:bg-accent-blue/90 disabled:cursor-not-allowed disabled:bg-slate-700 disabled:text-slate-400 disabled:opacity-80;
   }
 
   .btn-secondary {
@@ -605,7 +599,7 @@ textarea:focus-visible {
   }
 
   .input-shell {
-    @apply w-full rounded-xl border border-white/10 bg-slate-950/80 px-4 py-3 text-sm text-white outline-none transition focus:border-accent-400 focus:ring-2 focus:ring-accent-400/20;
+    @apply w-full rounded-xl border border-white/10 bg-slate-950/80 px-4 py-3 text-sm text-white outline-none transition focus:border-accent-blue focus:ring-2 focus:ring-accent-blue/20;
   }
 
   .label-text {
