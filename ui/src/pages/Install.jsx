@@ -3,31 +3,15 @@ import ErrorDiagnosisPanel from '../components/ErrorDiagnosisPanel.jsx';
 import AdvancedLogsDrawer from '../components/AdvancedLogsDrawer.jsx';
 import { useInstallExecution } from '../hooks/useInstallExecution.js';
 import {
-  buildInstallStageList,
   formatRuntimePhaseLabel,
   INSTALL_EXECUTION_PHASES,
+  INSTALL_RUNTIME_PHASES,
 } from '../utils/installExecution.js';
-
-function stageTone(state) {
-  switch (state) {
-    case 'done':
-      return 'border-emerald-400/20 bg-emerald-400/10 text-emerald-100';
-    case 'active':
-      return 'border-cyan-400/30 bg-cyan-400/10 text-cyan-50';
-    case 'failed':
-      return 'border-rose-400/30 bg-rose-400/10 text-rose-100';
-    default:
-      return 'border-white/10 bg-white/[0.03] text-slate-400';
-  }
-}
 
 export default function Install({ draft, uiState, validation, onChange }) {
   const logRef = useRef(null);
-  // Mantém o auto-scroll "colado no fim" apenas enquanto o usuário não rolou para cima.
   const stickToBottomRef = useRef(true);
   const [rebootBusy, setRebootBusy] = useState(false);
-  const [showSafetyModal, setShowSafetyModal] = useState(false);
-  const [safetyChecked, setSafetyChecked] = useState(false);
   const [installerToken, setInstallerToken] = useState(() => sessionStorage.getItem('installer_token') || '');
 
   useEffect(() => {
@@ -54,12 +38,10 @@ export default function Install({ draft, uiState, validation, onChange }) {
 
   useEffect(() => {
     if (!logRef.current) return;
-    // Só força o scroll para o fim se o usuário ainda estiver colado na base.
     if (!stickToBottomRef.current) return;
     logRef.current.scrollTop = logRef.current.scrollHeight;
   }, [executionState.logTail]);
 
-  // Recalcula se o usuário está (aproximadamente) no fim do console a cada rolagem.
   const handleLogScroll = (event) => {
     const el = event.currentTarget;
     stickToBottomRef.current = el.scrollHeight - el.scrollTop - el.clientHeight < 40;
@@ -68,6 +50,7 @@ export default function Install({ draft, uiState, validation, onChange }) {
   const phase = executionState.phase;
   const runtimePhase = executionState.status.currentPhase;
   const finalExit = executionState.status.exitCode;
+  
   const installSucceeded = phase === INSTALL_EXECUTION_PHASES.COMPLETED;
   const installFailed = phase === INSTALL_EXECUTION_PHASES.FAILED;
   const installRunning = phase === INSTALL_EXECUTION_PHASES.RUNNING || phase === INSTALL_EXECUTION_PHASES.VALIDATING;
@@ -79,7 +62,38 @@ export default function Install({ draft, uiState, validation, onChange }) {
     }
   }, [installRunning, uiState.installRunning, onChange]);
 
-  const stages = useMemo(() => buildInstallStageList(executionState.status), [executionState.status]);
+  const [elapsed, setElapsed] = useState(0);
+
+  useEffect(() => {
+    if (!installRunning || !executionState.status.startedAt) return;
+    
+    const startMs = executionState.status.startedAt > 9999999999 
+      ? executionState.status.startedAt 
+      : executionState.status.startedAt * 1000;
+    
+    const interval = setInterval(() => {
+      setElapsed(Math.floor((Date.now() - startMs) / 1000));
+    }, 1000);
+
+    return () => clearInterval(interval);
+  }, [installRunning, executionState.status.startedAt]);
+
+  const formatTime = (seconds) => {
+    if (seconds < 0) return '00:00';
+    const m = Math.floor(seconds / 60).toString().padStart(2, '0');
+    const s = Math.floor(seconds % 60).toString().padStart(2, '0');
+    return `${m}:${s}`;
+  };
+
+  const currentPhaseIndex = INSTALL_RUNTIME_PHASES.indexOf(runtimePhase);
+  const totalPhases = INSTALL_RUNTIME_PHASES.length;
+  
+  const progressPercent = installSucceeded 
+    ? 100 
+    : (installRunning && currentPhaseIndex >= 0 ? Math.max(5, Math.floor((currentPhaseIndex / totalPhases) * 100)) : 0);
+  
+  const estimatedTotalTime = 300; 
+  const remaining = installSucceeded ? 0 : Math.max(0, estimatedTotalTime - elapsed);
 
   const visibleIssues = useMemo(() => {
     const fromInstall = installValidation.blockingIssues.length > 0
@@ -89,18 +103,13 @@ export default function Install({ draft, uiState, validation, onChange }) {
   }, [installValidation.blockingIssues, installValidation.warnings, validation?.warnings]);
 
   const targetSummary = useMemo(() => {
-    const dataTarget = planPayload.disk.profile === 'raid'
-      ? `array ${String(planPayload.disk.raidLevel || '').toUpperCase()}`
-      : planPayload.disk.dataDisk || '/srv/data no mesmo BTRFS da raiz';
-
     return [
       ['Hostname', planPayload.network.hostname || '-'],
       ['Timezone', planPayload.locale.timezone || '-'],
       ['Interface', planPayload.network.interface || '-'],
-      ['Sistema', planPayload.disk.sysDisk || '-'],
-      ['Dados', dataTarget],
-      ['Root FS', planPayload.disk.rootFs || '-'],
-      ['Data FS', planPayload.disk.dataFs || '-'],
+      ['Disco Alvo', planPayload.disk.target || planPayload.disk.sysDisk || '-'],
+      ['Usuário', planPayload.admin.user || '-'],
+      ['Modo', planPayload.profile.mode || 'Desktop'],
     ];
   }, [planPayload]);
 
@@ -118,183 +127,217 @@ export default function Install({ draft, uiState, validation, onChange }) {
   }
 
   const handleStartRequest = () => {
-    setShowSafetyModal(true);
+    if (installerToken && uiState.destructiveConfirmed && installValidation.blockingIssues.length === 0) {
+      startInstallation();
+    }
   };
 
-  const handleFinalConfirm = () => {
-    setShowSafetyModal(false);
-    startInstallation();
-  };
+  const headerTitle = !installStarted 
+    ? 'Pronto para Instalar' 
+    : installSucceeded 
+      ? 'Instalação Concluída' 
+      : installFailed 
+        ? 'Falha na Instalação' 
+        : 'Instalação em Andamento';
+
+  const headerSubtitle = !installStarted 
+    ? 'Aguardando confirmação para iniciar as operações.'
+    : installSucceeded
+      ? 'O sistema operacional foi implantado com sucesso.'
+      : installFailed
+        ? 'A operação foi interrompida devido a um erro.'
+        : `Fase atual: ${formatRuntimePhaseLabel(runtimePhase)}`;
 
   return (
-    <div className="grid h-full min-h-0 gap-5 lg:grid-cols-[0.4fr_1fr]">
-      <section className="section-panel flex min-h-0 flex-col border border-emerald-400/10 bg-slate-950/95">
-        <div>
-          <div className="text-xs font-semibold uppercase tracking-[0.32em] text-emerald-400/80">Kryonix installer</div>
-          <h2 className="mt-3 text-2xl font-black text-white">Execucao operacional</h2>
-          <p className="mt-2 text-sm text-slate-400">
-            Esta tela acompanha o que o backend e o shell realmente executam no alvo. Sem confirmacao destrutiva, o wipe nao inicia.
-          </p>
+    <div className="flex h-full min-h-0 flex-col gap-6">
+      {/* HEADER FULL-WIDTH OPERACIONAL */}
+      <section className="shrink-0 rounded-2xl border border-white/10 bg-slate-950/60 p-6 shadow-panel backdrop-blur-md">
+        <div className="flex items-center justify-between">
+          <div>
+            <div className="text-[10px] font-bold uppercase tracking-[0.24em] text-accent-blue">
+              Kryonix OS Deployer
+            </div>
+            <h2 className="mt-1 text-2xl font-black text-white">{headerTitle}</h2>
+            <p className="mt-1 text-sm font-medium text-slate-400">{headerSubtitle}</p>
+          </div>
+          
+          {installStarted && (
+            <div className="flex gap-8 text-right">
+              <div>
+                <div className="text-[10px] font-bold uppercase tracking-widest text-slate-500">Tempo Decorrido</div>
+                <div className="text-xl font-mono font-bold text-white mt-1">{formatTime(elapsed)}</div>
+              </div>
+              {!installSucceeded && !installFailed && (
+                <div>
+                  <div className="text-[10px] font-bold uppercase tracking-widest text-slate-500">ETA Estimado</div>
+                  <div className="text-xl font-mono font-bold text-slate-300 mt-1">{remaining > 0 ? formatTime(remaining) : '--:--'}</div>
+                </div>
+              )}
+            </div>
+          )}
         </div>
 
-        <div className="mt-5 space-y-4 overflow-y-auto pr-1">
-          {!installStarted ? (
-            <button
-              type="button"
-              className="btn-primary"
-              disabled={!uiState.destructiveConfirmed || installValidation.blockingIssues.length > 0}
-              onClick={handleStartRequest}
-            >
-              Instalar agora
-            </button>
-          ) : (
-            <button
-              type="button"
-              className="btn-primary"
-              disabled={true}
-            >
-              {phase === INSTALL_EXECUTION_PHASES.VALIDATING
-                ? 'Validando pipeline...'
-                : phase === INSTALL_EXECUTION_PHASES.RUNNING
-                  ? 'Instalacao em execucao'
-                  : installSucceeded 
-                    ? 'Instalacao concluida'
-                    : 'Falha na instalacao'}
-            </button>
-          )}
-
-          <button type="button" className="btn-secondary" disabled={!installSucceeded || rebootBusy} onClick={handleReboot}>
-            {rebootBusy ? 'Reiniciando...' : 'Reiniciar sistema'}
-          </button>
-
-          <div className="rounded-2xl border border-rose-400/20 bg-rose-400/10 p-4 text-sm text-rose-200">
-            <div className="font-semibold text-rose-50">Gate destrutivo</div>
-            <div className="mt-1">
-              {uiState.destructiveConfirmed
-                ? 'confirmado: o backend recebeu permissao para apagar os discos selecionados.'
-                : 'bloqueado: volte ao resumo e confirme o wipe antes de iniciar.'}
+        {installStarted && (
+          <div className="mt-6">
+            <div className="flex justify-between text-[11px] font-bold uppercase tracking-widest text-slate-400 mb-2">
+              <span>Progresso Real</span>
+              <span>{progressPercent}%</span>
+            </div>
+            <div className="h-2 w-full overflow-hidden rounded-full bg-black/60 shadow-inner">
+              <div 
+                className={`h-full rounded-full transition-all duration-1000 ease-out ${
+                  installFailed ? 'bg-danger' : installSucceeded ? 'bg-success' : 'bg-accent-blue shadow-[0_0_10px_rgba(37,99,235,0.5)]'
+                }`}
+                style={{ width: `${progressPercent}%` }}
+              />
             </div>
           </div>
+        )}
+      </section>
 
-          {visibleIssues.length > 0 ? (
-            <div className="rounded-2xl border border-amber-400/20 bg-amber-400/10 p-4 text-sm text-amber-100">
-              <div className="font-semibold text-amber-50">Bloqueios e alertas</div>
-              <ul className="mt-2 list-disc space-y-1 pl-5">
+      {/* GRID PRINCIPAL: 35% ESQUERDA / 65% DIREITA */}
+      <div className="grid min-h-0 flex-1 gap-6 lg:grid-cols-[0.35fr_0.65fr]">
+        
+        {/* COLUNA ESQUERDA: Ações e Contexto */}
+        <section className="flex min-h-0 flex-col gap-4 overflow-y-auto pr-2 custom-scrollbar">
+          
+          {/* Botões de Ação */}
+          <div className="flex flex-col gap-3">
+            {!installStarted ? (
+              <button
+                type="button"
+                className="btn-primary w-full shadow-lg shadow-accent-blue/20"
+                disabled={!uiState.destructiveConfirmed || installValidation.blockingIssues.length > 0 || !installerToken}
+                onClick={handleStartRequest}
+              >
+                Instalar agora
+              </button>
+            ) : (
+              <button
+                type="button"
+                className={`w-full py-2.5 rounded-xl text-sm font-bold text-center transition-all ${
+                  installSucceeded 
+                    ? 'bg-success/20 text-success border border-success/30' 
+                    : installFailed 
+                      ? 'bg-danger/20 text-danger border border-danger/30'
+                      : 'bg-accent-blue/20 text-accent-blue border border-accent-blue/30 opacity-70 cursor-not-allowed'
+                }`}
+                disabled={true}
+              >
+                {installSucceeded 
+                  ? 'Concluído' 
+                  : installFailed 
+                    ? 'Falha Operacional'
+                    : 'Instalando...'}
+              </button>
+            )}
+
+            {(installSucceeded || installFailed) && (
+              <button 
+                type="button" 
+                className="btn-secondary w-full" 
+                disabled={rebootBusy} 
+                onClick={handleReboot}
+              >
+                {rebootBusy ? 'Reiniciando...' : 'Reiniciar sistema'}
+              </button>
+            )}
+            
+            {installSucceeded && (
+              <p className="text-center text-[11px] font-medium text-slate-400 mt-1">
+                Lembre-se de remover a mídia de instalação antes de reiniciar.
+              </p>
+            )}
+          </div>
+
+          {/* Gate Destrutivo (Segurança da operação) */}
+          {!installStarted && (
+            <div className="rounded-xl border border-rose-400/20 bg-rose-400/10 p-4">
+              <div className="flex items-center gap-2 mb-1">
+                <svg className="w-4 h-4 text-rose-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"></path></svg>
+                <h3 className="text-[11px] font-bold uppercase tracking-widest text-rose-300">Segurança da Operação</h3>
+              </div>
+              <p className="text-xs text-rose-200/80 font-medium leading-relaxed">
+                O backend recebeu autorização na etapa anterior para executar operações destrutivas no disco. Revise o alvo antes de iniciar.
+              </p>
+            </div>
+          )}
+
+          {/* Alertas */}
+          {visibleIssues.length > 0 && !installStarted && (
+            <div className="rounded-xl border border-amber-400/20 bg-amber-400/10 p-4 text-sm text-amber-100">
+              <div className="text-[11px] font-bold uppercase tracking-widest text-amber-300 mb-2">Bloqueios Pendentes</div>
+              <ul className="list-disc space-y-1 pl-4 text-xs">
                 {visibleIssues.map((issue) => <li key={issue}>{issue}</li>)}
               </ul>
             </div>
-          ) : null}
+          )}
 
-          {(executionState.globalError && !executionState.status.lastError) ? (
-            <div className="rounded-2xl border border-rose-400/20 bg-rose-400/10 p-4 text-sm text-rose-200">
-              {executionState.globalError}
+          {/* Resumo do Alvo */}
+          <div className="rounded-xl border border-white/10 bg-white/[0.02] overflow-hidden mt-2">
+            <div className="border-b border-white/5 bg-white/5 px-4 py-3">
+              <h3 className="text-[10px] font-bold uppercase tracking-widest text-slate-400">Resumo do Alvo</h3>
             </div>
-          ) : null}
-
-          <div className="rounded-2xl border border-white/10 bg-white/[0.03] p-4 text-sm text-slate-300">
-            <div className="text-xs font-semibold uppercase tracking-[0.24em] text-slate-500">Estado atual</div>
-            <div className="mt-3 space-y-1">
-              <div>Status geral: <b className="text-white">{phase}</b></div>
-              <div>Fase atual: <b className="text-white">{formatRuntimePhaseLabel(runtimePhase)}</b></div>
-              <div>Plano salvo: <b className="text-white">{executionState.planSubmitted ? 'sim' : 'nao'}</b></div>
-              <div>Streaming: <b className="text-white">{executionState.streamConnected ? 'ativo' : 'inativo'}</b></div>
-              <div>Exit code: <b className="text-white">{finalExit ?? '-'}</b></div>
-            </div>
-          </div>
-
-          <div className="rounded-2xl border border-white/10 bg-white/[0.03] p-4 text-sm text-slate-300">
-            <div className="text-xs font-semibold uppercase tracking-[0.24em] text-slate-500">Resumo do alvo</div>
-            <div className="mt-3 space-y-2">
+            <div className="flex flex-col p-2">
               {targetSummary.map(([label, value]) => (
-                <div key={label} className="flex items-center justify-between gap-3 rounded-xl border border-white/10 bg-black/20 px-3 py-2">
-                  <span className="text-slate-400">{label}</span>
-                  <span className="text-right font-semibold text-white">{value}</span>
+                <div key={label} className="flex items-center justify-between px-3 py-2 border-b border-white/5 last:border-0 hover:bg-white/[0.02] transition-colors rounded-lg">
+                  <span className="text-[11px] font-semibold text-slate-500">{label}</span>
+                  <span className="text-[12px] font-bold text-slate-200">{value}</span>
                 </div>
               ))}
             </div>
           </div>
+          
+        </section>
 
-          <div className="rounded-2xl border border-white/10 bg-white/[0.03] p-4 text-sm text-slate-300">
-            <div className="text-xs font-semibold uppercase tracking-[0.24em] text-slate-500">Fases</div>
-            <div className="mt-3 space-y-2">
-              {stages.map((stage) => (
-                <div key={stage.id} className={`rounded-xl border px-3 py-2 ${stageTone(stage.state)}`}>
-                  <div className="flex items-center justify-between gap-3">
-                    <span className="font-semibold">{stage.label}</span>
-                    <span className="text-[11px] uppercase tracking-[0.2em]">{stage.state}</span>
-                  </div>
-                </div>
-              ))}
-            </div>
+        {/* COLUNA DIREITA: Terminal e Logs */}
+        <section className="flex min-h-0 flex-col overflow-hidden rounded-2xl border border-white/10 bg-black/80 shadow-inner">
+          <div className="flex items-center justify-between border-b border-white/10 bg-white/5 px-4 py-3">
+            <h3 className="text-[10px] font-bold uppercase tracking-widest text-slate-400 flex items-center gap-2">
+              <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M8 9l3 3-3 3m5 0h3M4 17h16a2 2 0 002-2V5a2 2 0 00-2-2H4a2 2 0 00-2 2v10a2 2 0 002 2z"></path></svg>
+              Terminal de Instalação
+            </h3>
+            {installStarted && (
+              <span className={`text-[10px] font-bold uppercase px-2 py-0.5 rounded ${installSucceeded ? 'bg-success/20 text-success' : installFailed ? 'bg-danger/20 text-danger' : 'bg-accent-blue/20 text-accent-blue'}`}>
+                {installSucceeded ? 'Finalizado' : installFailed ? 'Erro Crítico' : 'Stream Ativo'}
+              </span>
+            )}
           </div>
 
-          <div className={`rounded-2xl border p-4 text-sm ${installSucceeded ? 'border-emerald-400/20 bg-emerald-400/10 text-emerald-100' : installFailed ? 'border-rose-400/20 bg-rose-400/10 text-rose-100' : 'border-cyan-400/20 bg-cyan-400/10 text-cyan-50'}`}>
-            {installSucceeded
-              ? 'Instalacao concluida com sucesso. O reinicio foi liberado.'
-              : installFailed
-                ? finalFailure
-                : 'O terminal ao lado transmite o log do shell em tempo real, com fase, verificacao e erro concreto.'}
-          </div>
-        </div>
-      </section>
-
-      <section className="flex min-h-0 flex-col overflow-hidden">
-        {executionState.rawError ? (
-          <ErrorDiagnosisPanel errorPayload={executionState.rawError} />
-        ) : null}
-
-        <div className="flex-1 mt-4 relative min-h-0">
-          <AdvancedLogsDrawer 
-            logs={executionState.logTail} 
-            autoScroll={stickToBottomRef.current} 
-            className="absolute bottom-0 w-full"
-          />
-        </div>
-      </section>
-
-      {showSafetyModal && (
-        <div className="modal-overlay" onClick={() => setShowSafetyModal(false)}>
-          <div 
-            className="modal-content glass-panel modal-danger" 
-            style={{ width: 480 }} 
-            onClick={e => e.stopPropagation()}
-          >
-            <h3 className="modal-title">Aviso Crítico de Segurança</h3>
-            
-            <div className="warning-box">
-              <div className="warning-text">
-                Você está prestes a iniciar a instalação do Kryonix OS. Esta ação é <b>irreversível</b> e resultará na perda total de dados nos seguintes dispositivos:
-                <ul className="mt-2 list-disc pl-5 opacity-80">
-                  <li>{planPayload.disk.target} (Sistema)</li>
-                  {planPayload.disk.selectedDisks?.filter(d => d !== planPayload.disk.target).map(d => (
-                    <li key={d}>{d} (Dados/RAID)</li>
-                  ))}
-                </ul>
+          {!installStarted ? (
+            <div className="flex-1 flex flex-col items-center justify-center text-center p-8 bg-[url('/img/noise.png')] bg-repeat opacity-80">
+              <div className="w-12 h-12 rounded-xl bg-white/5 border border-white/10 flex items-center justify-center mb-4 text-slate-500">
+                <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 6v6m0 0v6m0-6h6m-6 0H6"></path></svg>
               </div>
+              <h4 className="text-slate-300 font-bold mb-1">Aguardando Início</h4>
+              <p className="text-[13px] text-slate-500 max-w-sm">
+                Os logs detalhados e as interações do backend serão exibidos aqui em tempo real assim que a instalação começar.
+              </p>
             </div>
+          ) : (
+            <>
+              {executionState.rawError ? (
+                <ErrorDiagnosisPanel errorPayload={executionState.rawError} />
+              ) : null}
 
-            <label className="danger-checkbox">
-              <input 
-                type="checkbox" 
-                checked={safetyChecked}
-                onChange={e => setSafetyChecked(e.target.checked)}
-              />
-              <span>Entendo que <b>TODOS</b> os dados nos discos selecionados serão permanentemente apagados.</span>
-            </label>
+              {installFailed && !executionState.rawError && (
+                <div className="bg-danger/10 border-b border-danger/20 p-4 text-sm text-danger-light font-medium">
+                  {finalFailure}
+                </div>
+              )}
 
-            <div className="modal-actions mt-8">
-              <button className="btn-secondary" onClick={() => setShowSafetyModal(false)}>Cancelar</button>
-              <button 
-                className="btn-primary bg-red-600 border-red-500 hover:bg-red-500 disabled:opacity-30" 
-                disabled={!safetyChecked || !installerToken}
-                onClick={handleFinalConfirm}
-              >
-                Confirmar e Instalar
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
+              <div className="flex-1 relative min-h-0 bg-[#0A0A0C]">
+                <AdvancedLogsDrawer 
+                  logs={executionState.logTail} 
+                  autoScroll={stickToBottomRef.current} 
+                  onScroll={handleLogScroll}
+                  className="absolute bottom-0 w-full"
+                />
+              </div>
+            </>
+          )}
+        </section>
+      </div>
     </div>
   );
 }
