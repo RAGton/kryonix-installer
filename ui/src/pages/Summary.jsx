@@ -169,34 +169,34 @@ export default function Summary({ wizard, uiState, onChange, validation }) {
   }, [onChange]);
 
   return (
-    <div className="grid h-full min-h-0 gap-6 lg:grid-cols-[1.05fr_0.95fr]">
-      <section className="section-panel min-h-0 overflow-y-auto">
+    <div className="grid h-full min-h-0 gap-6 lg:grid-cols-[7fr_3fr] animate-fade-in-up">
+      <section className="flex flex-col min-h-0 overflow-y-auto pr-2 pb-6">
         <div className="mb-5">
           <h2 className="text-xl font-black text-white">Resumo final antes de instalar</h2>
           <p className="mt-2 text-sm text-slate-300">Revise tudo. Este é o último checkpoint antes de gerar o plano e iniciar a instalação com logs em tempo real.</p>
         </div>
 
         <div className="grid gap-4 md:grid-cols-2">
-          <div className="rounded-2xl border border-white/10 bg-white/[0.04] p-4">
-            <div className="text-xs font-semibold uppercase tracking-[0.24em] text-slate-400">Instalação & Host</div>
-            <div className="mt-2 text-sm text-white">Hostname: {wizard.hostName || 'pendente'}</div>
-            <div className="mt-1 text-sm text-slate-300">Fonte: {formatSourceKind(wizard.sourceKind)}</div>
-            <div className="mt-1 text-sm text-slate-400">Acesso Remoto: {wizard.targetRemoteAccessEnabled ? 'Ativado' : 'Desativado'}</div>
-            <div className="mt-1 text-sm text-slate-400">
+          <div className="bg-white/50 dark:bg-bg-elevated/30 border border-slate-200/50 dark:border-white/5 rounded-xl p-4 shadow-sm transition-all hover:bg-white/80 dark:hover:bg-bg-elevated/50">
+            <div className="text-[10px] font-bold uppercase tracking-widest text-slate-500 dark:text-text-muted">Instalação & Host</div>
+            <div className="mt-2 text-sm font-semibold text-slate-900 dark:text-text-primary">Hostname: {wizard.hostName || 'pendente'}</div>
+            <div className="mt-1 text-[13px] text-slate-600 dark:text-text-secondary">Fonte: {formatSourceKind(wizard.sourceKind)}</div>
+            <div className="mt-1 text-[13px] text-slate-500 dark:text-text-muted">Acesso Remoto: {wizard.targetRemoteAccessEnabled ? 'Ativado' : 'Desativado'}</div>
+            <div className="mt-1 text-[13px] text-slate-500 dark:text-text-muted">
               Perfil: {profileObj ? profileObj.name : 'Nenhum'}
             </div>
           </div>
-          <div className="rounded-2xl border border-white/10 bg-white/[0.04] p-4">
-            <div className="text-xs font-semibold uppercase tracking-[0.24em] text-slate-400">Rede</div>
-            <div className="mt-2 text-sm text-white">WAN: {wizard.wanInterface ? `${wizard.wanInterface} • modo ${wizard.wanMode}` : 'opcional / desabilitada'}</div>
-            <div className="mt-1 text-sm text-slate-300">LAN/PXE: {wizard.mgmtInterface || 'sem interface'}</div>
-            <div className="mt-1 text-sm text-slate-400">{networkSummary}</div>
+          <div className="bg-white/50 dark:bg-bg-elevated/30 border border-slate-200/50 dark:border-white/5 rounded-xl p-4 shadow-sm transition-all hover:bg-white/80 dark:hover:bg-bg-elevated/50">
+            <div className="text-[10px] font-bold uppercase tracking-widest text-slate-500 dark:text-text-muted">Rede</div>
+            <div className="mt-2 text-sm font-semibold text-slate-900 dark:text-text-primary">WAN: {wizard.wanInterface ? `${wizard.wanInterface} • modo ${wizard.wanMode}` : 'opcional / desabilitada'}</div>
+            <div className="mt-1 text-[13px] text-slate-600 dark:text-text-secondary">LAN/PXE: {wizard.mgmtInterface || 'sem interface'}</div>
+            <div className="mt-1 text-[13px] text-slate-500 dark:text-text-muted">{networkSummary}</div>
           </div>
-          <div className="rounded-2xl border border-white/10 bg-white/[0.04] p-4">
-            <div className="text-xs font-semibold uppercase tracking-[0.24em] text-slate-400">Discos</div>
-            <div className="mt-2 text-sm text-white">Layout: {layoutLabel}</div>
-            <div className="mt-1 text-sm text-slate-300">Sistema: {wizard.sysDisk || '—'}</div>
-            <div className="mt-1 text-sm text-slate-400">
+          <div className="bg-white/50 dark:bg-bg-elevated/30 border border-slate-200/50 dark:border-white/5 rounded-xl p-4 shadow-sm transition-all hover:bg-white/80 dark:hover:bg-bg-elevated/50">
+            <div className="text-[10px] font-bold uppercase tracking-widest text-slate-500 dark:text-text-muted">Discos</div>
+            <div className="mt-2 text-sm font-semibold text-slate-900 dark:text-text-primary">Layout: {layoutLabel}</div>
+            <div className="mt-1 text-[13px] text-slate-600 dark:text-text-secondary">Sistema: {wizard.sysDisk || '—'}</div>
+            <div className="mt-1 text-[13px] text-slate-500 dark:text-text-muted">
               {wizard.diskProfile === 'raid'
                 ? `Membros: ${(wizard.selectedDisks || []).join(', ') || '—'}`
                 : hasDedicatedData
@@ -204,10 +204,11 @@ export default function Summary({ wizard, uiState, onChange, validation }) {
                   : 'Dados: subvol interno no mesmo BTRFS (sem disco dedicado)'}
             </div>
           </div>
-          <div className="rounded-2xl border border-white/10 bg-white/[0.04] p-4">
-            <div className="text-xs font-semibold uppercase tracking-[0.24em] text-slate-400">Admin</div>
-            <div className="mt-2 text-sm text-white">{wizard.adminUser} • UID {wizard.adminUid}</div>
-            <div className="mt-1 text-sm text-slate-400">{wizard.adminEmail} • {sshCount} chave(s) SSH</div>
+          <div className="bg-white/50 dark:bg-bg-elevated/30 border border-slate-200/50 dark:border-white/5 rounded-xl p-4 shadow-sm transition-all hover:bg-white/80 dark:hover:bg-bg-elevated/50">
+            <div className="text-[10px] font-bold uppercase tracking-widest text-slate-500 dark:text-text-muted">Admin</div>
+            <div className="mt-2 text-sm font-semibold text-slate-900 dark:text-text-primary">{wizard.adminUser} • UID {wizard.adminUid}</div>
+            <div className="mt-1 text-[13px] text-slate-600 dark:text-text-secondary">{wizard.adminEmail}</div>
+            <div className="mt-1 text-[13px] text-slate-500 dark:text-text-muted">{sshCount} chave(s) SSH</div>
           </div>
         </div>
 
@@ -226,11 +227,11 @@ export default function Summary({ wizard, uiState, onChange, validation }) {
 
         {/* Features separadas */}
         {systemFeatures.length > 0 && (
-          <div className="mt-4 rounded-2xl border border-white/10 bg-white/[0.04] p-4">
-            <div className="text-xs font-semibold uppercase tracking-[0.24em] text-slate-400">Features de Sistema</div>
+          <div className="mt-4 bg-white/50 dark:bg-bg-elevated/30 border border-slate-200/50 dark:border-white/5 rounded-xl p-4 shadow-sm">
+            <div className="text-[10px] font-bold uppercase tracking-widest text-slate-500 dark:text-text-muted">Features de Sistema</div>
             <div className="mt-2 flex flex-wrap gap-2">
               {systemFeatures.map(f => (
-                <span key={f.id} className="px-2.5 py-1 text-xs rounded-lg font-medium bg-blue-500/15 text-blue-300 border border-blue-500/20">
+                <span key={f.id} className="px-2.5 py-1 text-xs rounded-lg font-medium bg-blue-50 dark:bg-blue-500/15 text-blue-700 dark:text-blue-300 border border-blue-200 dark:border-blue-500/20">
                   {f.name}
                 </span>
               ))}
@@ -238,11 +239,11 @@ export default function Summary({ wizard, uiState, onChange, validation }) {
           </div>
         )}
         {homeFeatures.length > 0 && (
-          <div className="mt-4 rounded-2xl border border-white/10 bg-white/[0.04] p-4">
-            <div className="text-xs font-semibold uppercase tracking-[0.24em] text-slate-400">Features Home Manager</div>
+          <div className="mt-4 bg-white/50 dark:bg-bg-elevated/30 border border-slate-200/50 dark:border-white/5 rounded-xl p-4 shadow-sm">
+            <div className="text-[10px] font-bold uppercase tracking-widest text-slate-500 dark:text-text-muted">Features Home Manager</div>
             <div className="mt-2 flex flex-wrap gap-2">
               {homeFeatures.map(f => (
-                <span key={f.id} className="px-2.5 py-1 text-xs rounded-lg font-medium bg-purple-500/15 text-purple-300 border border-purple-500/20">
+                <span key={f.id} className="px-2.5 py-1 text-xs rounded-lg font-medium bg-purple-50 dark:bg-purple-500/15 text-purple-700 dark:text-purple-300 border border-purple-200 dark:border-purple-500/20">
                   {f.name}
                 </span>
               ))}
@@ -250,17 +251,17 @@ export default function Summary({ wizard, uiState, onChange, validation }) {
           </div>
         )}
 
-        <div className="mt-5 rounded-2xl border border-rose-400/20 bg-rose-400/10 p-4 text-sm text-rose-100">
-          <div className="font-bold">Plano final de disco com confirmação destrutiva</div>
-          <p className="mt-2">Os discos selecionados podem ser limpos e reformatados. Confira novamente sistema, dados, rede e usuário antes de prosseguir.</p>
+        <div className="mt-5 rounded-xl border border-danger/20 bg-danger/5 dark:bg-danger/10 p-4 shadow-sm text-[13px] text-danger">
+          <div className="font-bold flex items-center gap-2"><span className="text-base">⚠</span> Plano final de disco com confirmação destrutiva</div>
+          <p className="mt-1">Os discos selecionados podem ser limpos e reformatados. Confira novamente sistema, dados, rede e usuário antes de prosseguir.</p>
         </div>
       </section>
 
-      <section className="section-panel flex min-h-0 flex-col justify-between">
+      <section className="flex flex-col min-h-0 bg-white/50 dark:bg-bg-elevated/30 border border-slate-200/50 dark:border-white/5 rounded-2xl shadow-sm p-6 overflow-y-auto">
         <div>
-          <div className="rounded-2xl border border-white/10 bg-slate-950/60 p-4">
-            <div className="text-xs font-semibold uppercase tracking-[0.24em] text-slate-400">Checklist crítico</div>
-            <ul className="mt-3 space-y-2 text-sm text-slate-300">
+          <div className="rounded-xl border border-slate-200/50 dark:border-white/10 bg-slate-50 dark:bg-slate-950/60 p-4">
+            <div className="text-[10px] font-bold uppercase tracking-widest text-slate-500 dark:text-text-muted">Checklist crítico</div>
+            <ul className="mt-3 space-y-2 text-[13px] font-medium text-slate-600 dark:text-text-secondary">
               <li>• EULA aceito: {uiState.eulaAccepted ? 'sim' : 'não'}</li>
               <li>• Hostname: {wizard.hostName ? 'sim' : 'não'}</li>
               <li>• Perfil selecionado: {wizard.profileId ? 'sim' : 'não'}</li>
@@ -282,24 +283,32 @@ export default function Summary({ wizard, uiState, onChange, validation }) {
               </div>
             ) : null}
             {validation?.warnings?.length > 0 ? (
-              <div className="mt-4 rounded-xl border border-amber-400/20 bg-amber-400/10 px-3 py-2 text-amber-100">
+              <div className="mt-4 rounded-xl border border-warning/20 bg-warning/5 dark:bg-warning/10 px-3 py-2 text-warning text-xs font-medium">
                 {validation.warnings[0]}
               </div>
             ) : null}
           </div>
 
-          <label className="mt-5 flex cursor-pointer items-start gap-3 rounded-2xl border border-amber-400/20 bg-amber-400/10 p-4">
+          <label className={`mt-5 flex cursor-pointer items-start gap-4 rounded-xl border p-4 transition-all ${
+            uiState.destructiveConfirmed
+              ? 'bg-warning/10 border-warning/40 shadow-inner'
+              : 'bg-white/5 border-white/10 hover:border-white/20 hover:bg-white/10'
+          }`}>
             <input
               type="checkbox"
-              className="mt-1 h-5 w-5 rounded border-white/20 bg-slate-950 text-accent-500"
+              className="mt-1 h-5 w-5 rounded border-white/20 bg-black/20 text-warning focus:ring-warning/50 shrink-0 cursor-pointer appearance-none checked:appearance-auto"
               checked={uiState.destructiveConfirmed}
               onChange={(event) => onChange({ destructiveConfirmed: event.target.checked })}
             />
-            <div>
-              <div className="font-semibold text-white">Confirmo que este plano pode apagar dados</div>
-              <div className="mt-1 text-sm text-slate-300">Entendo que os discos selecionados serão alterados pela instalação unattended.</div>
+            <div className="flex flex-col">
+              <span className={`text-[15px] font-bold ${uiState.destructiveConfirmed ? 'text-warning' : 'text-white'}`}>
+                Confirmo que este plano pode apagar dados
+              </span>
+              <span className={`text-[13px] font-medium mt-1 ${uiState.destructiveConfirmed ? 'text-warning/80' : 'text-slate-400'}`}>
+                Entendo que os discos selecionados serão alterados irreversivelmente.
+              </span>
             </div>
-            </label>
+          </label>
         </div>
 
         <div className="flex flex-col gap-3 mt-4">
