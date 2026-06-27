@@ -5,10 +5,7 @@ export default function HostSelection({ wizard, onChange, validation }) {
 
   return (
     <div className="wizard-content">
-      <h2 className="text-2xl font-bold mb-4">Identificação da Máquina</h2>
-      <p className="text-gray-400 mb-8">
-        Defina o nome pelo qual este computador será conhecido na rede.
-      </p>
+
 
       <div className="bg-gray-800/50 border border-gray-700 p-6 rounded-xl max-w-lg">
         <label className="block text-sm font-medium text-gray-300 mb-2">

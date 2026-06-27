@@ -212,12 +212,7 @@ export default function Timezone({ wizard, onChange, validation }) {
     <div className="flex h-full min-h-0 flex-col gap-6 lg:flex-row">
       {/* 72% Coluna Principal de Configuração */}
       <div className="flex flex-[0.72] flex-col overflow-y-auto pr-2 custom-scrollbar">
-        <div className="mb-4">
-          <h2 className="text-sm font-bold text-slate-900 dark:text-white">Fuso Horário</h2>
-          <p className="mt-1 text-[12px] font-medium text-slate-500 dark:text-slate-400">
-            Selecione no mapa ou busque sua região.
-          </p>
-        </div>
+
 
         <div className="mb-4">
           <KxCombobox

@@ -24,11 +24,6 @@ export default function Users({ wizard, onChange, validation }) {
   return (
     <div className="grid h-full min-h-0 gap-6 lg:grid-cols-[1fr_0.9fr]">
       <section className="section-panel min-h-0 overflow-y-auto">
-        <div className="mb-6">
-          <h2 className="text-xl font-black text-white">Conta administrativa</h2>
-          <p className="mt-2 text-sm text-slate-300">Defina o usuário principal do servidor e uma senha forte compatível com o backend do instalador.</p>
-        </div>
-
         <div className="grid gap-4 sm:grid-cols-2">
           <div>
             <label className="label-text" htmlFor="adminUser">Usuário</label>

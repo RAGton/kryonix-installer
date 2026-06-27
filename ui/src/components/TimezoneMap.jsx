@@ -18,37 +18,37 @@ import {
 
 function getSmartFramingStyle(location) {
   if (!location || !location.countryCode) {
-    return { transform: 'scale(1) translate(0, 0)', transition: 'transform 0.8s cubic-bezier(0.2, 0.8, 0.2, 1)' };
+    return { transform: 'scale(1) translate(0, 0)', transition: 'transform 1.6s cubic-bezier(0.16, 1, 0.3, 1)' };
   }
 
   const cc = location.countryCode;
 
   // América do Sul
   if (['BR', 'AR', 'CL', 'CO', 'PE', 'VE', 'EC', 'BO', 'PY', 'UY', 'GY', 'SR', 'GF'].includes(cc)) {
-    return { transform: 'scale(1.7) translate(12%, -25%)', transition: 'transform 0.8s cubic-bezier(0.2, 0.8, 0.2, 1)' };
+    return { transform: 'scale(1.7) translate(12%, -25%)', transition: 'transform 1.6s cubic-bezier(0.16, 1, 0.3, 1)' };
   }
 
   // América do Norte
   if (['US', 'CA', 'MX'].includes(cc)) {
-    return { transform: 'scale(1.5) translate(18%, 15%)', transition: 'transform 0.8s cubic-bezier(0.2, 0.8, 0.2, 1)' };
+    return { transform: 'scale(1.5) translate(18%, 15%)', transition: 'transform 1.6s cubic-bezier(0.16, 1, 0.3, 1)' };
   }
 
   // Europa
   if (['GB', 'FR', 'DE', 'IT', 'ES', 'PT', 'NL', 'BE', 'CH', 'AT', 'SE', 'NO', 'FI', 'DK', 'IE', 'PL', 'CZ', 'RO', 'GR', 'HU'].includes(cc)) {
-    return { transform: 'scale(1.9) translate(-8%, 28%)', transition: 'transform 0.8s cubic-bezier(0.2, 0.8, 0.2, 1)' };
+    return { transform: 'scale(1.9) translate(-8%, 28%)', transition: 'transform 1.6s cubic-bezier(0.16, 1, 0.3, 1)' };
   }
 
   // Ásia
   if (['CN', 'JP', 'IN', 'KR', 'ID', 'TH', 'VN', 'MY', 'PH', 'SG', 'TW', 'HK'].includes(cc)) {
-    return { transform: 'scale(1.6) translate(-25%, 5%)', transition: 'transform 0.8s cubic-bezier(0.2, 0.8, 0.2, 1)' };
+    return { transform: 'scale(1.6) translate(-25%, 5%)', transition: 'transform 1.6s cubic-bezier(0.16, 1, 0.3, 1)' };
   }
 
   // Oceania
   if (['AU', 'NZ'].includes(cc)) {
-    return { transform: 'scale(1.8) translate(-35%, -30%)', transition: 'transform 0.8s cubic-bezier(0.2, 0.8, 0.2, 1)' };
+    return { transform: 'scale(1.8) translate(-35%, -30%)', transition: 'transform 1.6s cubic-bezier(0.16, 1, 0.3, 1)' };
   }
 
-  return { transform: 'scale(1) translate(0, 0)', transition: 'transform 0.8s cubic-bezier(0.2, 0.8, 0.2, 1)' };
+  return { transform: 'scale(1) translate(0, 0)', transition: 'transform 1.6s cubic-bezier(0.16, 1, 0.3, 1)' };
 }
 
 function findZoneOverlayKey(location, layers) {
@@ -217,6 +217,7 @@ export default function TimezoneMap({ locations = [], selectedLocation, value, o
                 style={{
                   left: `${(activeLocation.x / CALAMARES_MAP_WIDTH) * 100}%`,
                   top: `${(activeLocation.y / CALAMARES_MAP_HEIGHT) * 100}%`,
+                  transition: 'left 1.6s cubic-bezier(0.16, 1, 0.3, 1), top 1.6s cubic-bezier(0.16, 1, 0.3, 1)',
                 }}
               />
               <img
@@ -226,6 +227,7 @@ export default function TimezoneMap({ locations = [], selectedLocation, value, o
                 style={{
                   left: `${(activeLocation.x / CALAMARES_MAP_WIDTH) * 100}%`,
                   top: `${(activeLocation.y / CALAMARES_MAP_HEIGHT) * 100}%`,
+                  transition: 'left 1.6s cubic-bezier(0.16, 1, 0.3, 1), top 1.6s cubic-bezier(0.16, 1, 0.3, 1)',
                 }}
                 draggable="false"
               />
@@ -234,6 +236,7 @@ export default function TimezoneMap({ locations = [], selectedLocation, value, o
                 style={{
                   left: `${(activeLocation.x / CALAMARES_MAP_WIDTH) * 100}%`,
                   top: `${(activeLocation.y / CALAMARES_MAP_HEIGHT) * 100}%`,
+                  transition: 'left 1.6s cubic-bezier(0.16, 1, 0.3, 1), top 1.6s cubic-bezier(0.16, 1, 0.3, 1)',
                 }}
               >
                 {activeLocation.label || activeLocation.timezone}

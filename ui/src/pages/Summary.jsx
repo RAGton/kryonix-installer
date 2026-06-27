@@ -171,10 +171,7 @@ export default function Summary({ wizard, uiState, onChange, validation }) {
   return (
     <div className="grid h-full min-h-0 gap-6 lg:grid-cols-[7fr_3fr] animate-fade-in-up">
       <section className="flex flex-col min-h-0 overflow-y-auto pr-2 pb-6">
-        <div className="mb-5">
-          <h2 className="text-xl font-black text-white">Resumo final antes de instalar</h2>
-          <p className="mt-2 text-sm text-slate-300">Revise tudo. Este é o último checkpoint antes de gerar o plano e iniciar a instalação com logs em tempo real.</p>
-        </div>
+
 
         <div className="grid gap-4 md:grid-cols-2">
           <div className="bg-white/50 dark:bg-bg-elevated/30 border border-slate-200/50 dark:border-white/5 rounded-xl p-4 shadow-sm transition-all hover:bg-white/80 dark:hover:bg-bg-elevated/50">

@@ -293,12 +293,7 @@ export default function Network({ wizard, onChange, validation }) {
 
       {/* ── ÁREA PRINCIPAL (CONFIGURAÇÃO - 70%) ────────────────────────── */}
       <section className="flex flex-col min-h-0 overflow-y-auto pr-2 pb-12">
-        <div className="mb-8">
-          <h2 className="text-3xl font-bold tracking-tight text-slate-900 dark:text-text-primary">Topologia de Rede</h2>
-          <p className="mt-2 text-base text-slate-500 dark:text-text-secondary font-medium">
-            Configure a infraestrutura de rede para o servidor Kryonix.
-          </p>
-        </div>
+
 
         {/* Toggle Mode */}
         <div className="mb-6 inline-flex bg-slate-200/50 dark:bg-bg-surface/50 p-1.5 rounded-xl border border-slate-200/50 dark:border-white/5 shadow-inner">

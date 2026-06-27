@@ -31,13 +31,7 @@ export default function MachineProfile({ wizard, onChange }) {
   };
 
   return (
-    <div className="wizard-content space-y-6">
-      <div>
-        <h2 className="text-2xl font-bold text-white">Perfil da Máquina</h2>
-        <p className="text-gray-400 mt-2">
-          Escolha o perfil que melhor descreve o uso principal desta máquina.
-        </p>
-      </div>
+    <div className="wizard-content space-y-6 h-full overflow-y-auto min-h-0 pb-4 pr-2 custom-scrollbar">
 
       <div className="rounded-2xl border border-blue-500/20 bg-blue-500/5 p-4 text-sm text-blue-200">
         <span className="font-bold">Este perfil influencia:</span> features de sistema, features de usuário, layout de disco, ativação de /srv/data e serviços instalados.

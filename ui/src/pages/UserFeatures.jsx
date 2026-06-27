@@ -17,10 +17,6 @@ export default function UserFeatures({ wizard, onChange }) {
 
   return (
     <div className="wizard-content">
-      <h2 className="text-2xl font-bold mb-4">Features de Usuário</h2>
-      <p className="text-gray-400 mb-8">
-        Personalize editores, shells, temas e ferramentas de desenvolvimento que serão instaladas para o seu usuário.
-      </p>
 
       <div className="space-y-8">
         {domains.map(domain => {

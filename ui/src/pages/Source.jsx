@@ -3,10 +3,6 @@ import React from 'react';
 export default function Source({ wizard, onChange }) {
   return (
     <div className="wizard-content">
-      <h2 className="text-2xl font-bold mb-4">Fonte de Instalacao</h2>
-      <p className="text-gray-400 mb-8">
-        Escolha de onde os artefatos de instalacao serao obtidos.
-      </p>
 
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
         {/* Offline Card */}

@@ -122,12 +122,7 @@ export default function Localization({ wizard, onChange }) {
     <div className="flex h-full min-h-0 flex-col gap-6 lg:flex-row">
       {/* 70% Coluna Principal de Configuração */}
       <div className="flex flex-1 flex-col overflow-y-auto pr-2 custom-scrollbar">
-        <div className="mb-6">
-          <h2 className="text-sm font-bold text-slate-900 dark:text-white">Idioma, teclado e região</h2>
-          <p className="mt-1 text-[12px] font-medium text-slate-500 dark:text-slate-400">
-            Configure a experiência local do sistema instalado.
-          </p>
-        </div>
+
 
         <div className="flex flex-col gap-5">
           <KxCombobox

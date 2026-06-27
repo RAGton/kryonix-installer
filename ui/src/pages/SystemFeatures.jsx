@@ -17,10 +17,6 @@ export default function SystemFeatures({ wizard, onChange }) {
 
   return (
     <div className="wizard-content">
-      <h2 className="text-2xl font-bold mb-4">Features de Sistema</h2>
-      <p className="text-gray-400 mb-8">
-        Personalize as ferramentas globais, IA, virtualização e acesso remoto disponíveis em nível de sistema.
-      </p>
 
       <div className="space-y-8">
         {domains.map(domain => {
