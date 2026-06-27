@@ -4,19 +4,22 @@ export default {
   theme: {
     extend: {
       colors: {
-        'bg': '#0B0F19', // Deep sci-fi space blue
-        'bg-elevated': '#111827', // slightly lighter panel
-        'bg-glass': 'rgba(17, 24, 39, 0.65)',
-        'border-subtle': '#1F2937',
-        'border-active': '#3B82F6',
-        'text-primary': '#F9FAFB',
-        'text-secondary': '#9CA3AF',
-        'text-muted': '#4B5563',
-        'accent-blue': '#3B82F6',
-        'accent-cyan': '#06B6D4',
-        'success': '#10B981',
-        'warning': '#F59E0B',
-        'danger': '#EF4444',
+        'bg': '#08111f',
+        'bg-elevated': '#0d1728',
+        'bg-surface': '#111c31',
+        'bg-glass': 'rgba(13, 23, 40, 0.65)',
+        'bg-light': '#f4f7fb',
+        'bg-light-glass': 'rgba(255, 255, 255, 0.7)',
+        'border-subtle': '#1e293b',
+        'border-active': '#3b82f6',
+        'text-primary': '#f3f7fb',
+        'text-secondary': '#a8b3c7',
+        'text-muted': '#475569',
+        'accent-blue': '#3b82f6',
+        'accent-cyan': '#38bdf8',
+        'success': '#10b981',
+        'warning': '#f59e0b',
+        'danger': '#ef4444',
       },
       spacing: {
         'shell': '2rem',

@@ -1,5 +1,6 @@
 import Background3D from './Background3D';
 import MockModeBanner from './MockModeBanner';
+import EagleLogo from './EagleLogo';
 
 export default function Layout({
   title,
@@ -11,18 +12,18 @@ export default function Layout({
   footer,
 }) {
   return (
-    <div className="shell relative bg-slate-50 text-slate-900 dark:bg-bg dark:text-text h-screen w-screen overflow-hidden flex flex-col font-sans transition-colors duration-300">
+    <div className="shell relative bg-bg-light text-slate-900 dark:bg-bg dark:text-text-primary h-screen w-screen overflow-hidden flex flex-col font-sans transition-colors duration-300">
       <Background3D />
       <MockModeBanner />
       
-      {/* Modern Shell Layout (macOS window style) */}
+      {/* Modern Shell Layout (macOS / Arc style) */}
       <div className="flex-1 flex overflow-hidden z-10 p-4 md:p-8 relative">
-        <div className="flex-1 w-full max-w-7xl mx-auto flex flex-col bg-white/70 dark:bg-bg-glass backdrop-blur-2xl border border-slate-200 dark:border-border rounded-2xl shadow-xl overflow-hidden transition-all duration-300">
+        <div className="flex-1 w-full max-w-7xl mx-auto flex flex-col bg-bg-light-glass dark:bg-bg-glass backdrop-blur-2xl border border-slate-200/50 dark:border-white/5 rounded-2xl shadow-panel overflow-hidden transition-all duration-300">
           
           {/* Top Navbar / Stepper */}
-          <header className="flex-none bg-slate-100/50 dark:bg-bg-elevated/50 border-b border-slate-200 dark:border-border px-6 py-4 flex items-center justify-between">
-            <h1 className="text-slate-900 dark:text-primary font-bold tracking-widest text-xs md:text-sm flex gap-2 items-center">
-              <span className="text-accent-blue dark:text-secondary">⟡</span> KRYONIX <span className="text-slate-500 dark:text-text2 font-normal">installer</span>
+          <header className="flex-none bg-transparent border-b border-slate-200/50 dark:border-white/5 px-6 py-4 flex items-center justify-between">
+            <h1 className="text-slate-900 dark:text-text-primary font-bold tracking-widest text-sm flex gap-3 items-center">
+              <EagleLogo className="w-5 h-5" /> KRYONIX <span className="text-slate-500 dark:text-text-secondary font-medium text-xs tracking-normal">Installer</span>
             </h1>
             
             <nav className="flex items-center gap-2 overflow-x-auto no-scrollbar" aria-label="Fases da Instalação">
