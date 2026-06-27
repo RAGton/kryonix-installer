@@ -318,6 +318,7 @@ async fn main() {
         .route("/clone", post(auth::clone_repo))
         // Install orchestration
         .route("/api/source/github/prepare", post(source::prepare_github_source))
+        .route("/api/source/github/create-from-template", post(source::create_from_template))
         .route("/plan", post(plan))
         .route("/dry-run", post(dry_run))
         .route("/install", post(install))

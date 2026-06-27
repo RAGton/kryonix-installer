@@ -165,7 +165,24 @@ const realInstallerApi = {
       body: JSON.stringify({ repo, branch }),
     });
   },
-
+  startDeviceFlow() {
+    return requestJson('/auth/github/device', { method: 'POST' });
+  },
+  pollDeviceFlow() {
+    return requestJson('/auth/github/poll');
+  },
+  createFromTemplate(repoName, isPrivate, branch, templateRepo) {
+    return requestJson('/api/source/github/create-from-template', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({
+        repoName,
+        private: isPrivate,
+        branch,
+        templateRepo
+      }),
+    });
+  },
   getDisks() {
     return requestJson('/api/disks').then(disks => disks.map(d => ({
       name: d.name,

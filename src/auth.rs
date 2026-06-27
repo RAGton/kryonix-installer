@@ -14,7 +14,7 @@ pub struct AuthState {
     /// How long to wait between polls (seconds). GitHub may increase this.
     poll_interval: u64,
     /// Bearer token — stored in memory only, never written to disk or store.
-    access_token: Option<String>,
+    pub access_token: Option<String>,
 }
 
 pub type SharedAuthState = Arc<Mutex<AuthState>>;
@@ -37,7 +37,7 @@ struct GhDeviceCode {
 #[derive(Deserialize)]
 struct GhToken {
     #[serde(default)]
-    access_token: Option<String>,
+    pub access_token: Option<String>,
     #[serde(default)]
     error: Option<String>,
     #[serde(default)]

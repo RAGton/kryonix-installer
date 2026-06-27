@@ -471,7 +471,7 @@ export default function Network({ wizard, onChange, validation }) {
                 <span className="animate-spin">↻</span> Aplicando...
               </>
             ) : (
-              'Aplicar Configuração'
+              <>{t('network_page.apply')} Configuração</>
             )}
           </button>
         </div>
@@ -574,7 +574,7 @@ export default function Network({ wizard, onChange, validation }) {
           <div className="bg-white/50 dark:bg-bg-elevated/30 border border-slate-200/50 dark:border-white/5 rounded-2xl shadow-sm overflow-hidden">
             <div className="p-5 flex flex-col gap-3">
               <div className="flex justify-between items-center text-sm">
-                <span className="font-medium text-slate-700 dark:text-slate-300">Status</span>
+                <span className="font-medium text-slate-700 dark:text-slate-300">{t('network_page.status')}</span>
                 <span className={`font-bold ${wanEnabled ? 'text-accent-blue' : 'text-slate-500'}`}>{wanEnabled ? 'Ativada' : 'Sem uplink dedicado'}</span>
               </div>
               {wanEnabled && (

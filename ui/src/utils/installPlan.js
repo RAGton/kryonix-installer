@@ -219,12 +219,29 @@ export function buildInstallPlanPayload(draftInput) {
   // Build raw payload then clean optional empty fields for schema compliance
   const rawPayload = {
     version: INSTALL_PLAN_VERSION,
-    source: {
+    source: draft.sourceKind === 'github-user-repo' ? {
+      kind: 'github-user-repo',
+      repo: draft.sourceRepoUrl,
+      branch: draft.sourceBranch || "main",
+      clonePath: "/run/kryonix-installer/sources/kryonixos",
+      targetPath: "/etc/kryonixos",
+      validated: Boolean(draft.sourceValidated),
+    } : draft.sourceKind === 'github-create-from-template' ? {
+      kind: 'github-create-from-template',
+      templateRepo: draft.templateRepoUrl,
+      repo: draft.createdRepoUrl,
+      branch: draft.sourceBranch || "main",
+      clonePath: "/run/kryonix-installer/sources/kryonixos",
+      targetPath: "/etc/kryonixos",
+      validated: Boolean(draft.sourceValidated),
+      created: true,
+    } : draft.sourceKind === 'template' ? {
+      kind: 'template',
+      templateRepo: draft.templateRepoUrl,
+      validated: true,
+    } : {
       kind: 'offline-defaults',
-      repo: null,
-      branch: null,
-      commit: null,
-      host: sanitizeString(draft.hostName),
+      validated: true,
     },
     profile: {
       id: profileObj.id,
@@ -456,7 +473,15 @@ export function validateStep(stepId, draftInput, uiInput = {}) {
       }
       return result;
     case 'source':
-      // Em P1, source é sempre offline-defaults
+      if (draft.sourceKind === 'github-user-repo') {
+        if (!draft.sourceRepoUrl || draft.sourceRepoUrl.trim() === '') {
+          addBlockingIssue(result, 'Informe a URL do repositório GitHub.');
+        } else if (!uiState.githubSourceStatus || uiState.githubSourceStatus !== 'ready') {
+          addBlockingIssue(result, 'A fonte do repositório precisa estar validada e pronta para avançar.');
+        }
+      } else if (draft.sourceKind === 'github-create-from-template') {
+        addBlockingIssue(result, 'Criação de repositório em breve. Por favor, escolha outra opção.');
+      }
       return result;
     case 'localization':
       if (!payload.locale.country) addFieldError(result, 'country', 'Selecione um país/região.');

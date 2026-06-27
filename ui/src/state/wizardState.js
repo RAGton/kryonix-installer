@@ -2,8 +2,12 @@ export const WIZARD_STORAGE_KEY = 'kryonix.installer.wizard.v1';
 
 export const DRAFT_FIELD_NAMES = [
   'sourceKind',
-  'githubRepo',
-  'githubBranch',
+  'sourceRepoUrl',
+  'sourceBranch',
+  'templateRepoUrl',
+  'sourceClonePath',
+  'sourceTargetPath',
+  'sourceValidated',
   'profileId',
   'selectedFeatures',
   'targetRemoteAccessEnabled',
@@ -80,8 +84,26 @@ const UI_TRANSIENT_FIELD_SET = new Set(UI_TRANSIENT_FIELD_NAMES);
 
 export const INITIAL_INSTALL_PLAN_DRAFT = {
   sourceKind: 'offline-defaults',
-  githubRepo: 'https://github.com/RAGton/Kryonixos',
-  githubBranch: 'main',
+  sourceRepoUrl: '',
+  sourceBranch: 'main',
+  templateRepoUrl: 'https://github.com/RAGton/Kryonixos.git',
+  sourceClonePath: '/run/kryonix-installer/sources/kryonixos',
+  sourceTargetPath: '/etc/kryonixos',
+  sourceValidated: false,
+  sourceStatus: "idle",
+  sourceError: null,
+
+  templateRepoUrl: "https://github.com/RAGton/Kryonixos.git",
+
+  githubAuthStatus: "idle",
+  githubDeviceCode: null,
+  githubUserCode: null,
+  githubVerificationUri: null,
+  githubTokenReady: false,
+
+  createRepoName: "kryonixos",
+  createRepoPrivate: true,
+  createdRepoUrl: "",
   profileId: 'desktop',
   selectedFeatures: [],
   targetRemoteAccessEnabled: false,
