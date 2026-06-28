@@ -190,3 +190,38 @@ export function toDiskoPartitions(layout) {
     format: true,
   }));
 }
+
+// Validação matemática estrita de alocação de espaço
+export function validateDiskAllocation(disk, partitions) {
+  const diskSize = toBytes(disk?.sizeBytes ?? disk?.size_bytes ?? 0);
+  const diskPath = disk?.path || disk?.name;
+  
+  if (diskSize <= 0) {
+    return {
+      errors: ['Tamanho real do disco indisponível. Recarregue a lista de discos ou verifique o backend.'],
+      warnings: [],
+      allocatedBytes: 0,
+      freeBytes: 0
+    };
+  }
+  
+  const diskParts = Array.isArray(partitions) ? partitions.filter(p => p.device === diskPath) : [];
+  const allocatedBytes = diskParts.reduce((total, p) => total + toBytes(p.sizeBytes || p.size_bytes), 0);
+  const freeBytes = Math.max(0, diskSize - allocatedBytes);
+  
+  const errors = [];
+  const warnings = [];
+  
+  if (allocatedBytes > diskSize) {
+    errors.push(`Soma das partições (${formatBytes(allocatedBytes)}) excede o tamanho total do disco (${formatBytes(diskSize)}).`);
+  } else if (allocatedBytes === diskSize) {
+    warnings.push('Disco totalmente alocado.');
+  }
+  
+  return {
+    errors,
+    warnings,
+    allocatedBytes,
+    freeBytes
+  };
+}

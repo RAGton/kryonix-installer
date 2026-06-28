@@ -109,3 +109,41 @@ test('manual: marca layout manual e é inválido até definição', () => {
   assert.equal(layout.manual, true);
   assert.equal(validateProposedLayout(layout).valid, false);
 });
+
+import { validateDiskAllocation } from '../utils/layoutAssistant.js';
+
+test('validateDiskAllocation: lida com disco 0 bytes', () => {
+  const disk = { path: '/dev/nvme0n1', size_bytes: 0 };
+  const res = validateDiskAllocation(disk, []);
+  assert.equal(res.errors.length, 1);
+  assert.ok(/0/.test(res.allocatedBytes));
+  assert.equal(res.freeBytes, 0);
+});
+
+test('validateDiskAllocation: calcula corretamente alocação normal e total', () => {
+  const disk = { path: '/dev/sda', sizeBytes: 100 * GB };
+  const res = validateDiskAllocation(disk, [
+    { device: '/dev/sda', sizeBytes: 50 * GB }
+  ]);
+  assert.equal(res.errors.length, 0);
+  assert.equal(res.warnings.length, 0);
+  assert.equal(res.freeBytes, 50 * GB);
+
+  const resFull = validateDiskAllocation(disk, [
+    { device: '/dev/sda', sizeBytes: 100 * GB }
+  ]);
+  assert.equal(resFull.errors.length, 0);
+  assert.equal(resFull.warnings.length, 1);
+  assert.ok(/totalmente alocado/i.test(resFull.warnings[0]));
+  assert.equal(resFull.freeBytes, 0);
+});
+
+test('validateDiskAllocation: erro em over-allocation', () => {
+  const disk = { path: '/dev/sda', sizeBytes: 100 * GB };
+  const res = validateDiskAllocation(disk, [
+    { device: '/dev/sda', sizeBytes: 120 * GB }
+  ]);
+  assert.equal(res.errors.length, 1);
+  assert.ok(/excede o tamanho total/i.test(res.errors[0]));
+  assert.equal(res.freeBytes, 0);
+});

@@ -13,7 +13,7 @@ import {
   validateSingleDiskLayout,
   validateSplitDiskLayout,
 } from '../utils/storagePlanner.js';
-import { parseSizeInput } from '../utils/layoutAssistant.js';
+import { parseSizeInput, validateDiskAllocation } from '../utils/layoutAssistant.js';
 
 const TABS_ID = ['automatic', 'manual', 'lvm', 'raid'];
 
@@ -85,6 +85,13 @@ function PartitionBar({ partitions, totalBytes }) {
             title={`Livre — ${formatBytes(free)}`}
           />
         )}
+        {used > total && total > 0 && (
+          <div
+            className="partition-seg bg-danger"
+            style={{ width: `${((used - total) / total) * 100}%`, minWidth: '4px' }}
+            title={`Excedido — ${formatBytes(used - total)}`}
+          />
+        )}
       </div>
       <div className="mt-2 flex flex-wrap gap-x-3 gap-y-1 text-[10px] text-slate-400">
         {partitions.map((p, i) => (
@@ -97,6 +104,12 @@ function PartitionBar({ partitions, totalBytes }) {
           <div className="flex items-center gap-1.5">
             <div className="w-2 h-2 rounded-full bg-slate-600/30" />
             <span>Livre</span>
+          </div>
+        )}
+        {used > total && total > 0 && (
+          <div className="flex items-center gap-1.5">
+            <div className="w-2 h-2 rounded-full bg-danger" />
+            <span className="text-danger font-bold">Over-Allocation</span>
           </div>
         )}
       </div>
@@ -280,21 +293,37 @@ function TabAutomatico({ wizard, eligibleDisks, partitions, onChange, onReload, 
     </div>
   );
 }
-
 function TabManual({ wizard, onChange, eligibleDisks }) {
   const { t } = useTranslation();
   const parts = wizard.manualPartitions || [];
   
+  let canCreatePartition = false;
+  let bestDiskForNew = eligibleDisks[0];
+  let maxFree = 0;
+  
+  const diskValidations = eligibleDisks.map(disk => {
+    const result = validateDiskAllocation(disk, parts);
+    if (result.freeBytes > maxFree) {
+      maxFree = result.freeBytes;
+      bestDiskForNew = disk;
+    }
+    if (result.errors.length === 0 && result.freeBytes > 0) {
+      canCreatePartition = true;
+    }
+    return result;
+  });
+
   const addPartition = () => {
-    onChange({
+    if (!canCreatePartition || !bestDiskForNew) return;
+    onChange({ 
       manualPartitions: [...parts, { 
         id: Math.random().toString(36).substr(2, 9),
-        device: eligibleDisks[0]?.path || '', 
+        device: bestDiskForNew.path || '', 
         usage: 'root',
         mountpoint: '/', 
         fstype: 'btrfs', 
-        sizeInput: '20GiB',
-        sizeBytes: parseSizeInput('20GiB', eligibleDisks[0]?.size_bytes || 0, eligibleDisks[0]?.size_bytes || 0),
+        sizeInput: formatBytes(maxFree),
+        sizeBytes: maxFree,
         label: 'kryonix-root',
         format: true 
       }]
@@ -333,6 +362,13 @@ function TabManual({ wizard, onChange, eligibleDisks }) {
 
   // Validations
   const validations = [];
+  const warnings = [];
+  
+  diskValidations.forEach(res => {
+    validations.push(...res.errors);
+    warnings.push(...res.warnings);
+  });
+  
   const hasRoot = parts.some(p => p.mountpoint === '/');
   const hasEfi = parts.some(p => p.usage === 'efi' || p.mountpoint === '/boot' || p.mountpoint === '/boot/efi');
   const bootMode = wizard.sysDisk?.boot_mode || 'uefi';
@@ -342,25 +378,12 @@ function TabManual({ wizard, onChange, eligibleDisks }) {
   
   const mps = parts.map(p => p.mountpoint).filter(Boolean);
   if (new Set(mps).size !== mps.length) validations.push('Existem pontos de montagem duplicados');
-  
-  const diskTotals = {};
-  parts.forEach(p => {
-    if (!diskTotals[p.device]) diskTotals[p.device] = 0;
-    diskTotals[p.device] += p.sizeBytes || 0;
-  });
-  
-  Object.keys(diskTotals).forEach(d => {
-    const disk = eligibleDisks.find(dk => dk.path === d);
-    if (disk && diskTotals[d] > disk.size_bytes) {
-      validations.push(`Soma das partições excede o tamanho total do disco ${d}`);
-    }
-  });
 
   return (
     <div className="p-4">
       <div className="flex items-center justify-between mb-4">
         <h3 className="text-sm font-bold text-white">Particionamento Manual</h3>
-        <button type="button" onClick={addPartition} className="px-3 py-1.5 bg-accent-blue text-black text-xs font-bold rounded hover:bg-accent-blue/80 transition-colors">
+        <button type="button" onClick={addPartition} disabled={!canCreatePartition} className={`px-3 py-1.5 text-xs font-bold rounded transition-colors ${canCreatePartition ? 'bg-accent-blue text-black hover:bg-accent-blue/80' : 'bg-white/10 text-slate-500 cursor-not-allowed'}`}>
           Nova Partição
         </button>
       </div>
@@ -434,6 +457,15 @@ function TabManual({ wizard, onChange, eligibleDisks }) {
           <strong className="block mb-2">Erros de Validação:</strong>
           <ul className="list-disc pl-5">
             {validations.map((v, i) => <li key={i}>{v}</li>)}
+          </ul>
+        </div>
+      )}
+
+      {warnings.length > 0 && validations.length === 0 && (
+        <div className="mb-6 bg-amber-500/10 border border-amber-500/20 rounded-xl p-4 text-amber-500 text-sm">
+          <strong className="block mb-2">Avisos:</strong>
+          <ul className="list-disc pl-5">
+            {warnings.map((v, i) => <li key={i}>{v}</li>)}
           </ul>
         </div>
       )}
