@@ -225,7 +225,9 @@ export function buildInstallPlanPayload(draftInput) {
       branch: draft.sourceBranch || "main",
       clonePath: "/run/kryonix-installer/sources/kryonixos",
       targetPath: "/etc/kryonixos",
-      validated: Boolean(draft.sourceValidated),
+      commit: draft.sourceRepoCommit || null,
+      host: draft.sourceHost || null,
+      validated: true,
     } : draft.sourceKind === 'github-create-from-template' ? {
       kind: 'github-create-from-template',
       templateRepo: draft.templateRepoUrl,

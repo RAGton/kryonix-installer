@@ -280,22 +280,64 @@
           "type": "array",
           "items": {
             "type": "object",
+            "additionalProperties": false,
             "required": [
               "device",
-              "mountpoint",
               "fstype",
-              "size",
+              "sizeBytes",
+              "sizeInput",
+              "usage",
               "format"
             ],
             "properties": {
-              "device": {
+              "id": {
                 "type": "string"
+              },
+              "device": {
+                "type": "string",
+                "pattern": "^/dev/(sd[a-z]|vd[a-z]|nvme[0-9]+n[0-9]+)$"
+              },
+              "sizeBytes": {
+                "type": "number",
+                "minimum": 0
+              },
+              "sizeInput": {
+                "type": "string"
+              },
+              "usage": {
+                "enum": [
+                  "efi",
+                  "root",
+                  "home",
+                  "swap",
+                  "data",
+                  "custom"
+                ]
+              },
+              "fstype": {
+                "enum": [
+                  "fat32",
+                  "btrfs",
+                  "ext4",
+                  "xfs",
+                  "swap",
+                  "vfat"
+                ]
               },
               "mountpoint": {
                 "type": "string"
               },
-              "fstype": {
+              "label": {
                 "type": "string"
+              },
+              "partLabel": {
+                "type": "string"
+              },
+              "flags": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                }
               },
               "size": {
                 "type": "string"

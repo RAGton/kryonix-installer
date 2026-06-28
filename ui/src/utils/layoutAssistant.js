@@ -31,6 +31,26 @@ function toBytes(value) {
   return Number.isFinite(n) && n > 0 ? n : 0;
 }
 
+export function parseSizeInput(input, totalBytes, freeBytes) {
+  if (!input) return 0;
+  const str = String(input).trim().toLowerCase();
+  if (str === 'resto' || str === 'restante') return Math.max(0, freeBytes);
+  if (str.endsWith('%')) {
+    const pct = parseFloat(str);
+    if (Number.isNaN(pct)) return 0;
+    return Math.floor(Math.max(0, Math.min(100, pct)) / 100 * totalBytes);
+  }
+  const match = str.match(/^([\d.]+)\s*(mib|gib|tib|mb|gb|tb)?$/);
+  if (!match) return 0;
+  const val = parseFloat(match[1]);
+  if (Number.isNaN(val)) return 0;
+  const unit = match[2];
+  if (unit === 'mib' || unit === 'mb') return Math.floor(val * MiB);
+  if (unit === 'gib' || unit === 'gb') return Math.floor(val * GiB);
+  if (unit === 'tib' || unit === 'tb') return Math.floor(val * GiB * 1024);
+  return Math.floor(val);
+}
+
 export function bytesToPercent(bytes, totalBytes) {
   const total = toBytes(totalBytes);
   if (total <= 0) return 0;

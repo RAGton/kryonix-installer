@@ -58,23 +58,32 @@ function PartitionBar({ partitions, totalBytes }) {
     );
   }
 
-  const total = Number(totalBytes) || partitions.reduce((s, p) => s + Number(p.size_bytes || 0), 0);
+  const total = Number(totalBytes) || partitions.reduce((s, p) => s + Number(p.sizeBytes || p.size_bytes || 0), 0);
+  const used = partitions.reduce((s, p) => s + Number(p.sizeBytes || p.size_bytes || 0), 0);
+  const free = Math.max(0, total - used);
 
   return (
     <div className="mt-3">
       <div className="partition-bar border border-white/5 bg-black/20 rounded h-2 overflow-hidden flex">
         {partitions.map((p, i) => {
-          const size = Number(p.size_bytes || p.size || 0);
-          const pct = total > 0 ? Math.max((size / total) * 100, 1) : 100/partitions.length;
+          const size = Number(p.sizeBytes || p.size_bytes || p.size || 0);
+          const pct = total > 0 ? (size / total) * 100 : 100 / partitions.length;
           return (
             <div
               key={i}
               className={`partition-seg ${segClass(p)}`}
-              style={{ flex: `${pct} 0 0` }}
-              title={`${partLabel(p)} — ${p.size || '?'}`}
+              style={{ width: `${pct}%`, minWidth: pct > 0 ? '3px' : '0' }}
+              title={`${partLabel(p)} — ${formatBytes(size)}`}
             />
           );
         })}
+        {free > 0 && (
+          <div
+            className="partition-seg bg-slate-600/30"
+            style={{ width: `${(free / total) * 100}%` }}
+            title={`Livre — ${formatBytes(free)}`}
+          />
+        )}
       </div>
       <div className="mt-2 flex flex-wrap gap-x-3 gap-y-1 text-[10px] text-slate-400">
         {partitions.map((p, i) => (
@@ -83,6 +92,12 @@ function PartitionBar({ partitions, totalBytes }) {
             <span>{partLabel(p)}</span>
           </div>
         ))}
+        {free > 0 && (
+          <div className="flex items-center gap-1.5">
+            <div className="w-2 h-2 rounded-full bg-slate-600/30" />
+            <span>Livre</span>
+          </div>
+        )}
       </div>
     </div>
   );
@@ -271,76 +286,141 @@ function TabManual({ wizard, onChange, eligibleDisks }) {
   
   const addPartition = () => {
     onChange({
-      manualPartitions: [...parts, { device: eligibleDisks[0]?.path || '', mountpoint: '', fstype: 'btrfs', size: '20GiB', format: true }]
+      manualPartitions: [...parts, { 
+        id: Math.random().toString(36).substr(2, 9),
+        device: eligibleDisks[0]?.path || '', 
+        usage: 'root',
+        mountpoint: '/', 
+        fstype: 'btrfs', 
+        sizeInput: '20GiB',
+        sizeBytes: parseSizeInput('20GiB', eligibleDisks[0]?.size_bytes || 0, eligibleDisks[0]?.size_bytes || 0),
+        label: 'kryonix-root',
+        format: true 
+      }]
     });
   };
+
+  const updatePart = (index, updates) => {
+    const np = [...parts];
+    np[index] = { ...np[index], ...updates };
+    
+    // Auto-calculate sizeBytes if sizeInput or device changed
+    if (updates.sizeInput !== undefined || updates.device !== undefined) {
+      const disk = eligibleDisks.find(d => d.path === np[index].device);
+      const total = disk?.size_bytes || 0;
+      const usedByOthers = np.filter((_, i) => i !== index && _.device === np[index].device).reduce((acc, p) => acc + (p.sizeBytes || 0), 0);
+      const free = Math.max(0, total - usedByOthers);
+      np[index].sizeBytes = parseSizeInput(np[index].sizeInput, total, free);
+    }
+    
+    // Auto-fill fields based on usage
+    if (updates.usage !== undefined) {
+      const u = updates.usage;
+      if (u === 'efi') { np[index].fstype = 'fat32'; np[index].mountpoint = '/boot'; np[index].label = 'EFI'; }
+      if (u === 'root') { np[index].fstype = 'btrfs'; np[index].mountpoint = '/'; np[index].label = 'kryonix-root'; }
+      if (u === 'home') { np[index].fstype = 'btrfs'; np[index].mountpoint = '/home'; np[index].label = 'kryonix-home'; }
+      if (u === 'swap') { np[index].fstype = 'swap'; np[index].mountpoint = ''; np[index].label = 'kryonix-swap'; }
+    }
+    
+    if (updates.fstype === 'swap') {
+      np[index].usage = 'swap';
+      np[index].mountpoint = '';
+    }
+
+    onChange({ manualPartitions: np });
+  };
+
+  // Validations
+  const validations = [];
+  const hasRoot = parts.some(p => p.mountpoint === '/');
+  const hasEfi = parts.some(p => p.usage === 'efi' || p.mountpoint === '/boot' || p.mountpoint === '/boot/efi');
+  const bootMode = wizard.sysDisk?.boot_mode || 'uefi';
   
+  if (!hasRoot) validations.push('Falta partição root (/)');
+  if (bootMode === 'uefi' && !hasEfi) validations.push('Falta partição EFI (obrigatória em UEFI)');
+  
+  const mps = parts.map(p => p.mountpoint).filter(Boolean);
+  if (new Set(mps).size !== mps.length) validations.push('Existem pontos de montagem duplicados');
+  
+  const diskTotals = {};
+  parts.forEach(p => {
+    if (!diskTotals[p.device]) diskTotals[p.device] = 0;
+    diskTotals[p.device] += p.sizeBytes || 0;
+  });
+  
+  Object.keys(diskTotals).forEach(d => {
+    const disk = eligibleDisks.find(dk => dk.path === d);
+    if (disk && diskTotals[d] > disk.size_bytes) {
+      validations.push(`Soma das partições excede o tamanho total do disco ${d}`);
+    }
+  });
+
   return (
     <div className="p-4">
-      <div className="mb-4 bg-warning/10 border border-warning/20 rounded-xl p-4 flex gap-3 text-warning text-sm">
-        <span className="text-xl">⚠</span>
-        <div>
-          <strong className="block mb-1">{t('storage.manual.warningTitle')}</strong>
-          {t('storage.manual.warningDesc')}
-        </div>
-      </div>
-
       <div className="flex items-center justify-between mb-4">
-        <h3 className="text-sm font-bold text-white">{t('storage.manual.title')}</h3>
+        <h3 className="text-sm font-bold text-white">Particionamento Manual</h3>
         <button type="button" onClick={addPartition} className="px-3 py-1.5 bg-accent-blue text-black text-xs font-bold rounded hover:bg-accent-blue/80 transition-colors">
-          {t('storage.manual.addPartition')}
+          Nova Partição
         </button>
       </div>
 
-      <div className="overflow-hidden rounded-xl border border-white/10 bg-white/[0.02] mb-6">
+      <div className="overflow-x-auto rounded-xl border border-white/10 bg-white/[0.02] mb-6">
         <table className="w-full text-left text-xs text-slate-300">
           <thead className="bg-white/5 uppercase tracking-wider text-[10px] font-bold text-slate-400">
             <tr>
-              <th className="px-4 py-3">{t('storage.manual.disk')}</th>
-              <th className="px-4 py-3">{t('storage.manual.size')}</th>
-              <th className="px-4 py-3">{t('storage.manual.filesystem')}</th>
-              <th className="px-4 py-3">{t('storage.manual.mountpoint')}</th>
-              <th className="px-4 py-3 text-right">{t('storage.manual.action')}</th>
+              <th className="px-4 py-3">Disco</th>
+              <th className="px-4 py-3">Tamanho</th>
+              <th className="px-4 py-3">Uso</th>
+              <th className="px-4 py-3">FS</th>
+              <th className="px-4 py-3">Rótulo (Label)</th>
+              <th className="px-4 py-3">Mountpoint</th>
+              <th className="px-4 py-3 text-right">Ação</th>
             </tr>
           </thead>
           <tbody className="divide-y divide-white/5">
             {parts.length === 0 ? (
               <tr>
-                <td colSpan="5" className="px-4 py-8 text-center text-slate-400 italic">{t('storage.manual.empty')}</td>
+                <td colSpan="7" className="px-4 py-8 text-center text-slate-400 italic">Nenhuma partição definida</td>
               </tr>
             ) : parts.map((p, i) => (
-              <tr key={i} className="hover:bg-white/[0.02]">
+              <tr key={p.id || i} className="hover:bg-white/[0.02]">
                 <td className="px-4 py-2">
-                  <select className="input-shell text-xs py-1 px-2" value={p.device} onChange={e => {
-                    const np = [...parts]; np[i].device = e.target.value; onChange({manualPartitions: np});
-                  }}>
+                  <select className="input-shell text-xs py-1 px-2 w-full" value={p.device} onChange={e => updatePart(i, { device: e.target.value })}>
                     {eligibleDisks.map(d => <option key={d.path} value={d.path}>{d.path}</option>)}
                   </select>
                 </td>
                 <td className="px-4 py-2">
-                  <input type="text" className="input-shell text-xs py-1 px-2 w-24" value={p.size} onChange={e => {
-                    const np = [...parts]; np[i].size = e.target.value; onChange({manualPartitions: np});
-                  }} placeholder="20GiB" />
+                  <input type="text" className="input-shell text-xs py-1 px-2 w-20" value={p.sizeInput || p.size} onChange={e => updatePart(i, { sizeInput: e.target.value })} onBlur={e => updatePart(i, { sizeInput: e.target.value })} placeholder="20GiB" title={p.sizeBytes ? formatBytes(p.sizeBytes) : 'Inválido'} />
                 </td>
                 <td className="px-4 py-2">
-                  <select className="input-shell text-xs py-1 px-2" value={p.fstype} onChange={e => {
-                    const np = [...parts]; np[i].fstype = e.target.value; onChange({manualPartitions: np});
-                  }}>
+                  <select className="input-shell text-xs py-1 px-2 w-full" value={p.usage} onChange={e => updatePart(i, { usage: e.target.value })}>
+                    <option value="efi">EFI</option>
+                    <option value="root">Root</option>
+                    <option value="home">Home</option>
+                    <option value="swap">Swap</option>
+                    <option value="data">Dados</option>
+                    <option value="custom">Custom</option>
+                  </select>
+                </td>
+                <td className="px-4 py-2">
+                  <select className="input-shell text-xs py-1 px-2 w-full" value={p.fstype} onChange={e => updatePart(i, { fstype: e.target.value })}>
                     <option value="btrfs">BTRFS</option>
                     <option value="ext4">EXT4</option>
-                    <option value="vfat">FAT32 (EFI)</option>
+                    <option value="fat32">FAT32 (EFI)</option>
+                    <option value="xfs">XFS</option>
                     <option value="swap">SWAP</option>
                   </select>
                 </td>
                 <td className="px-4 py-2">
-                  <input type="text" className="input-shell text-xs py-1 px-2 w-32" value={p.mountpoint} onChange={e => {
-                    const np = [...parts]; np[i].mountpoint = e.target.value; onChange({manualPartitions: np});
-                  }} placeholder="/" />
+                  <input type="text" className="input-shell text-xs py-1 px-2 w-24" value={p.label || ''} onChange={e => updatePart(i, { label: e.target.value })} placeholder="kryonix-root" />
+                </td>
+                <td className="px-4 py-2">
+                  <input type="text" className="input-shell text-xs py-1 px-2 w-24" value={p.mountpoint || ''} onChange={e => updatePart(i, { mountpoint: e.target.value })} disabled={p.usage === 'swap' || p.fstype === 'swap'} placeholder={p.usage === 'swap' ? 'N/A' : '/'} title={p.usage === 'swap' ? 'Swap não usa ponto de montagem' : ''} />
                 </td>
                 <td className="px-4 py-2 text-right">
                   <button type="button" onClick={() => {
                     const np = parts.filter((_, idx) => idx !== i); onChange({manualPartitions: np});
-                  }} className="text-danger hover:text-white px-2 py-1 rounded bg-danger/10 hover:bg-danger/20 transition-colors">{t('storage.manual.remove')}</button>
+                  }} className="text-danger hover:text-white px-2 py-1 rounded bg-danger/10 hover:bg-danger/20 transition-colors">X</button>
                 </td>
               </tr>
             ))}
@@ -348,17 +428,25 @@ function TabManual({ wizard, onChange, eligibleDisks }) {
         </table>
       </div>
 
-      {parts.length > 0 && (
-        <div className="rounded-xl border border-white/10 bg-white/[0.02] p-4">
-          <div className="flex h-8 w-full rounded-md overflow-hidden border border-white/10 bg-black/40">
-            {parts.map((p, i) => (
-              <div key={i} className={`${i%2===0 ? 'bg-indigo-500/80' : 'bg-accent-blue/80'} border-r border-black/20 flex items-center justify-center min-w-[20px]`} style={{flex: p.size.includes('100%') ? '1' : `0 0 ${Math.min(parseInt(p.size)||10, 100)}%`}}>
-                <span className="text-[10px] font-bold text-white px-1 truncate">{p.mountpoint || 'raw'}</span>
-              </div>
-            ))}
-          </div>
+      {validations.length > 0 && (
+        <div className="mb-6 bg-danger/10 border border-danger/20 rounded-xl p-4 text-danger text-sm">
+          <strong className="block mb-2">Erros de Validação:</strong>
+          <ul className="list-disc pl-5">
+            {validations.map((v, i) => <li key={i}>{v}</li>)}
+          </ul>
         </div>
       )}
+
+      {parts.length > 0 && eligibleDisks.map(disk => {
+        const diskParts = parts.filter(p => p.device === disk.path);
+        if (diskParts.length === 0) return null;
+        return (
+          <div key={disk.path} className="mb-4">
+            <h4 className="text-xs font-bold text-slate-400 mb-1">{disk.path} ({formatBytes(disk.size_bytes)})</h4>
+            <PartitionBar partitions={diskParts} totalBytes={disk.size_bytes} />
+          </div>
+        );
+      })}
     </div>
   );
 }

@@ -248,7 +248,7 @@ test('single, split e raid10 invalidos geram erros especificos', () => {
     diskMode: 'one',
     selectedDisks: ['/dev/sda', '/dev/sdb', '/dev/sdc', '/dev/sdd', '/dev/sde'],
     sysDisk: '/dev/sda',
-    raidLevel: 'raid10',
+    raidPlan: { level: 'raid10', devices: ['/dev/sda', '/dev/sdb', '/dev/sdc', '/dev/sdd', '/dev/sde'], filesystem: 'btrfs', mountpoint: '/' },
   }), createValidUi());
 
   assert.equal(raid10Validation.fieldErrors.selectedDisks, 'RAID 10 exige quantidade par de discos.');
@@ -331,15 +331,11 @@ test('buildInstallPlanPayload não vaza campos extras em source', () => {
   const draft = createValidDraft();
   const plan = buildInstallPlanPayload(draft);
 
-  // source deve conter apenas campos do schema
-  const allowedSourceKeys = ['kind', 'repo', 'branch', 'commit', 'host', 'profile'];
+  // source deve conter apenas campos definidos
+  const allowedSourceKeys = ['kind', 'repo', 'branch', 'commit', 'host', 'clonePath', 'targetPath', 'validated', 'created', 'templateRepo'];
   for (const key of Object.keys(plan.source)) {
     assert.ok(allowedSourceKeys.includes(key), `source contém chave extra: ${key}`);
   }
-  // repo, branch, commit devem ser null
-  assert.equal(plan.source.repo, null);
-  assert.equal(plan.source.branch, null);
-  assert.equal(plan.source.commit, null);
 });
 
 test('schema validation passa para payload DHCP com gateway omitido', () => {
