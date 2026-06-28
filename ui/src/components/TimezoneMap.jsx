@@ -80,6 +80,8 @@ function findZoneOverlayKey(location, layers) {
 export default function TimezoneMap({ locations = [], selectedLocation, value, onChange }) {
   const mapPlaneRef = useRef(null);
   const [layerState, setLayerState] = useState({ loading: true, layers: new Map(), error: '' });
+  const [flightAngle, setFlightAngle] = useState(0);
+  const prevLocRef = useRef(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -151,6 +153,27 @@ export default function TimezoneMap({ locations = [], selectedLocation, value, o
     [activeLocation, layerState.layers],
   );
 
+  useEffect(() => {
+    if (activeLocation) {
+      const prev = prevLocRef.current;
+      if (prev && prev.timezone !== activeLocation.timezone) {
+        const dx = activeLocation.x - prev.x;
+        const dy = activeLocation.y - prev.y;
+        
+        const angle = Math.atan2(dy, dx) * (180 / Math.PI);
+        const quantized = Math.round(angle / 45) * 45;
+        
+        setFlightAngle((currentAngle) => {
+          let diff = (quantized - currentAngle) % 360;
+          if (diff > 180) diff -= 360;
+          if (diff < -180) diff += 360;
+          return currentAngle + diff;
+        });
+      }
+      prevLocRef.current = activeLocation;
+    }
+  }, [activeLocation]);
+
   const activeOverlaySrc = activeOverlayKey ? getCalamaresZoneImagePath(activeOverlayKey) : '';
 
   function handleMapClick(event) {
@@ -220,17 +243,17 @@ export default function TimezoneMap({ locations = [], selectedLocation, value, o
                   transition: 'left 1.6s cubic-bezier(0.16, 1, 0.3, 1), top 1.6s cubic-bezier(0.16, 1, 0.3, 1)',
                 }}
               />
-              <img
-                src={CALAMARES_PIN_IMAGE}
-                alt="Marcador de timezone"
-                className="pointer-events-none absolute z-10 h-8 w-8 -translate-x-1/2 -translate-y-[80%] drop-shadow-[0_12px_16px_rgba(0,0,0,0.6)] select-none brightness-110"
+              <div
+                className="pointer-events-none absolute z-10 flex items-center justify-center text-3xl drop-shadow-[0_12px_16px_rgba(0,0,0,0.6)] select-none"
                 style={{
                   left: `${(activeLocation.x / CALAMARES_MAP_WIDTH) * 100}%`,
                   top: `${(activeLocation.y / CALAMARES_MAP_HEIGHT) * 100}%`,
-                  transition: 'left 1.6s cubic-bezier(0.16, 1, 0.3, 1), top 1.6s cubic-bezier(0.16, 1, 0.3, 1)',
+                  transform: `translate(-50%, -50%) rotate(${flightAngle + 45}deg)`,
+                  transition: 'left 1.6s cubic-bezier(0.16, 1, 0.3, 1), top 1.6s cubic-bezier(0.16, 1, 0.3, 1), transform 0.8s cubic-bezier(0.16, 1, 0.3, 1)',
                 }}
-                draggable="false"
-              />
+              >
+                ✈️
+              </div>
               <div
                 className="pointer-events-none absolute z-20 -translate-x-1/2 -translate-y-[220%] rounded-xl border border-white/10 bg-slate-900/90 px-3.5 py-1.5 text-xs font-bold text-white shadow-2xl backdrop-blur-md whitespace-nowrap"
                 style={{
