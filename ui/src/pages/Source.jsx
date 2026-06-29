@@ -18,14 +18,14 @@ export default function Source({ wizard, uiState, onChange }) {
       } else {
         onChange({ 
           githubSourceStatus: 'error', 
-          githubSourceError: res.error || res.message || 'Erro desconhecido na validação',
+          githubSourceError: res.error || res.message || t('source.timeline.errorUnknown', { defaultValue: 'Erro desconhecido na validação' }),
           sourceValidated: false,
         });
       }
     } catch (err) {
       onChange({ 
         githubSourceStatus: 'error', 
-        githubSourceError: err.message || 'Falha ao comunicar com backend',
+        githubSourceError: err.message || t('source.timeline.errorBackend', { defaultValue: 'Falha ao comunicar com backend' }),
         sourceValidated: false,
       });
     }
@@ -66,7 +66,7 @@ export default function Source({ wizard, uiState, onChange }) {
       } else if (res.status === 'slow_down' || res.status === 'SlowDown') {
         setTimeout(() => pollDeviceFlow(intervalSeconds + 5), (intervalSeconds + 5) * 1000);
       } else {
-        onChange({ githubAuthStatus: 'error', sourceError: res.message || 'Auth failed' });
+        onChange({ githubAuthStatus: 'error', sourceError: res.message || t('source.timeline.authFailed', { defaultValue: 'Auth failed' }) });
       }
     } catch (err) {
       onChange({ githubAuthStatus: 'error', sourceError: err.message });
@@ -92,7 +92,7 @@ export default function Source({ wizard, uiState, onChange }) {
       } else {
         onChange({ 
           githubSourceStatus: 'error', 
-          githubSourceError: res.error || 'Erro ao criar repositório',
+          githubSourceError: res.error || t('source.createRepo.errorCreate', { defaultValue: 'Erro ao criar repositório' }),
           sourceValidated: false,
         });
       }
@@ -314,13 +314,13 @@ export default function Source({ wizard, uiState, onChange }) {
             <TimelineItem 
               status={uiState.githubSourceStatus === 'cloning' ? 'loading' : (uiState.githubSourceStatus ? 'done' : 'waiting')}
               title={t('source.timeline.clone')}
-              desc={uiState.githubSourceStatus === 'cloning' ? 'Cloning...' : 'Cloned'}
+              desc={uiState.githubSourceStatus === 'cloning' ? t('source.timeline.cloning', { defaultValue: 'Cloning...' }) : t('source.timeline.cloned', { defaultValue: 'Cloned' })}
             />
             
             <TimelineItem 
               status={uiState.githubSourceStatus === 'error' ? 'error' : (uiState.githubSourceStatus === 'ready' ? 'done' : 'waiting')}
               title={t('source.timeline.validateFlake')}
-              desc={uiState.githubSourceError || (uiState.githubSourceStatus === 'ready' ? t('source.timeline.ready') : 'Waiting validation...')}
+              desc={uiState.githubSourceError || (uiState.githubSourceStatus === 'ready' ? t('source.timeline.ready') : t('source.timeline.waitingValidation', { defaultValue: 'Waiting validation...' }))}
             />
           </div>
 
@@ -348,7 +348,7 @@ export default function Source({ wizard, uiState, onChange }) {
             <TimelineItem 
               status={wizard.githubAuthStatus === 'error' ? 'error' : 'done'}
               title={t('source.timeline.githubAuth')}
-              desc={wizard.sourceError || (wizard.githubAuthStatus === 'authorized' ? 'Autorizado' : '')}
+              desc={wizard.sourceError || (wizard.githubAuthStatus === 'authorized' ? t('source.timeline.authorized', { defaultValue: 'Autorizado' }) : '')}
             />
             
             <TimelineItem 
@@ -360,13 +360,13 @@ export default function Source({ wizard, uiState, onChange }) {
             <TimelineItem 
               status={uiState.githubSourceStatus === 'cloning' ? 'loading' : (uiState.githubSourceStatus === 'ready' || uiState.githubSourceStatus === 'error' && uiState.githubSourceError !== 'Autorizado' ? 'done' : 'waiting')}
               title={t('source.timeline.clone')}
-              desc={uiState.githubSourceStatus === 'cloning' ? 'Cloning...' : ''}
+              desc={uiState.githubSourceStatus === 'cloning' ? t('source.timeline.cloning', { defaultValue: 'Cloning...' }) : ''}
             />
             
             <TimelineItem 
               status={uiState.githubSourceStatus === 'error' && wizard.githubAuthStatus !== 'error' ? 'error' : (uiState.githubSourceStatus === 'ready' ? 'done' : 'waiting')}
               title={t('source.timeline.validateFlake')}
-              desc={uiState.githubSourceError || (uiState.githubSourceStatus === 'ready' ? t('source.createRepo.ready') : 'Waiting validation...')}
+              desc={uiState.githubSourceError || (uiState.githubSourceStatus === 'ready' ? t('source.createRepo.ready') : t('source.timeline.waitingValidation', { defaultValue: 'Waiting validation...' }))}
             />
           </div>
 

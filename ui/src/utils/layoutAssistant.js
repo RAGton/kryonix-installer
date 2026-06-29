@@ -192,13 +192,13 @@ export function toDiskoPartitions(layout) {
 }
 
 // Validação matemática estrita de alocação de espaço
-export function validateDiskAllocation(disk, partitions) {
+export function validateDiskAllocation(disk, partitions, t = (k, opts) => opts?.defaultValue || k) {
   const diskSize = toBytes(disk?.sizeBytes ?? disk?.size_bytes ?? 0);
   const diskPath = disk?.path || disk?.name;
   
   if (diskSize <= 0) {
     return {
-      errors: ['Tamanho real do disco indisponível. Recarregue a lista de discos ou verifique o backend.'],
+      errors: [t('partitioning.manual.realDiskSizeUnavailable', { defaultValue: 'Tamanho real do disco indisponível. Recarregue a lista de discos ou verifique o backend.' })],
       warnings: [],
       allocatedBytes: 0,
       freeBytes: 0
@@ -213,9 +213,15 @@ export function validateDiskAllocation(disk, partitions) {
   const warnings = [];
   
   if (allocatedBytes > diskSize) {
-    errors.push(`Soma das partições (${formatBytes(allocatedBytes)}) excede o tamanho total do disco (${formatBytes(diskSize)}).`);
+    errors.push(t('partitioning.manual.allocationExceeded', { 
+      disk: diskPath, 
+      diskSize: formatBytes(diskSize), 
+      allocatedSize: formatBytes(allocatedBytes), 
+      excessSize: formatBytes(allocatedBytes - diskSize), 
+      defaultValue: `Soma das partições (${formatBytes(allocatedBytes)}) excede o tamanho total do disco (${formatBytes(diskSize)}).` 
+    }));
   } else if (allocatedBytes === diskSize) {
-    warnings.push('Disco totalmente alocado.');
+    warnings.push(t('partitioning.manual.fullyAllocated', { defaultValue: 'Disco totalmente alocado.' }));
   }
   
   return {
@@ -223,5 +229,56 @@ export function validateDiskAllocation(disk, partitions) {
     warnings,
     allocatedBytes,
     freeBytes
+  };
+}
+
+export function evaluateManualPartitioningState(eligibleDisks, manualPartitions, bootMode = 'uefi', t = (k, opts) => opts?.defaultValue || k) {
+  let canCreatePartition = false;
+  let bestDiskForNew = eligibleDisks[0];
+  let maxFree = 0;
+  
+  const diskValidations = eligibleDisks.map(disk => {
+    const result = validateDiskAllocation(disk, manualPartitions, t);
+    if (result.freeBytes > maxFree) {
+      maxFree = result.freeBytes;
+      bestDiskForNew = disk;
+    }
+    if (result.errors.length === 0 && result.freeBytes > 0) {
+      canCreatePartition = true;
+    }
+    return result;
+  });
+
+  const validations = [];
+  const warnings = [];
+  
+  diskValidations.forEach(res => {
+    validations.push(...res.errors);
+    warnings.push(...res.warnings);
+  });
+  
+  const hasRoot = manualPartitions.some(p => p.mountpoint === '/');
+  const hasEfi = manualPartitions.some(p => p.usage === 'efi' || p.mountpoint === '/boot' || p.mountpoint === '/boot/efi');
+  
+  if (!hasRoot) validations.push(t('partitioning.manual.rootRequired', { defaultValue: 'Falta partição root (/)' }));
+  if (bootMode === 'uefi' && !hasEfi) validations.push(t('partitioning.manual.efiRequired', { defaultValue: 'Falta partição EFI (obrigatória em UEFI)' }));
+  
+  const efiInvalid = manualPartitions.some(p => p.usage === 'efi' && p.fstype !== 'fat32' && p.fstype !== 'vfat');
+  if (efiInvalid) validations.push(t('partitioning.manual.efiMustBeFat32', { defaultValue: 'A partição EFI precisa usar FAT32' }));
+  
+  const mps = manualPartitions.map(p => p.mountpoint).filter(Boolean);
+  if (new Set(mps).size !== mps.length) validations.push(t('partitioning.manual.duplicateMountpoints', { defaultValue: 'Existem pontos de montagem duplicados' }));
+  
+  const labels = manualPartitions.map(p => p.label).filter(Boolean);
+  if (new Set(labels).size !== labels.length) warnings.push(t('partitioning.manual.duplicateLabel', { defaultValue: 'Há rótulos duplicados neste disco' }));
+
+  return {
+    canCreatePartition,
+    bestDiskForNew,
+    maxFree,
+    diskValidations,
+    validations,
+    warnings,
+    isValid: validations.length === 0
   };
 }

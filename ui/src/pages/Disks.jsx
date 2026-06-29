@@ -13,7 +13,14 @@ import {
   validateSingleDiskLayout,
   validateSplitDiskLayout,
 } from '../utils/storagePlanner.js';
-import { parseSizeInput, validateDiskAllocation } from '../utils/layoutAssistant.js';
+import { 
+  buildProposedLayout, 
+  validateProposedLayout, 
+  toDiskoPartitions, 
+  validateDiskAllocation,
+  evaluateManualPartitioningState,
+  parseSizeInput 
+} from '../utils/layoutAssistant.js';
 
 const TABS_ID = ['automatic', 'manual', 'lvm', 'raid'];
 
@@ -51,6 +58,8 @@ function partLabel(part) {
 /* ── sub-componentes ── */
 
 function PartitionBar({ partitions, totalBytes }) {
+  const { t } = useTranslation();
+
   if (!partitions || partitions.length === 0) {
     return (
       <div className="partition-bar mt-3 border border-white/5 bg-black/20 rounded h-2 overflow-hidden flex">
@@ -82,14 +91,14 @@ function PartitionBar({ partitions, totalBytes }) {
           <div
             className="partition-seg bg-slate-600/30"
             style={{ width: `${(free / total) * 100}%` }}
-            title={`Livre — ${formatBytes(free)}`}
+            title={`${t('partitioning.manual.freeSpace')} — ${formatBytes(free)}`}
           />
         )}
         {used > total && total > 0 && (
           <div
             className="partition-seg bg-danger"
             style={{ width: `${((used - total) / total) * 100}%`, minWidth: '4px' }}
-            title={`Excedido — ${formatBytes(used - total)}`}
+            title={`Over-Allocation — ${formatBytes(used - total)}`}
           />
         )}
       </div>
@@ -103,7 +112,7 @@ function PartitionBar({ partitions, totalBytes }) {
         {free > 0 && (
           <div className="flex items-center gap-1.5">
             <div className="w-2 h-2 rounded-full bg-slate-600/30" />
-            <span>Livre</span>
+            <span>{t('partitioning.manual.freeSpace')}</span>
           </div>
         )}
         {used > total && total > 0 && (
@@ -297,21 +306,13 @@ function TabManual({ wizard, onChange, eligibleDisks }) {
   const { t } = useTranslation();
   const parts = wizard.manualPartitions || [];
   
-  let canCreatePartition = false;
-  let bestDiskForNew = eligibleDisks[0];
-  let maxFree = 0;
+  const bootMode = wizard.sysDisk?.boot_mode || 'uefi';
+  const state = evaluateManualPartitioningState(eligibleDisks, parts, bootMode, t);
   
-  const diskValidations = eligibleDisks.map(disk => {
-    const result = validateDiskAllocation(disk, parts);
-    if (result.freeBytes > maxFree) {
-      maxFree = result.freeBytes;
-      bestDiskForNew = disk;
-    }
-    if (result.errors.length === 0 && result.freeBytes > 0) {
-      canCreatePartition = true;
-    }
-    return result;
-  });
+  const canCreatePartition = state.canCreatePartition;
+  const bestDiskForNew = state.bestDiskForNew;
+  const maxFree = state.maxFree;
+  const diskValidations = state.diskValidations;
 
   const addPartition = () => {
     if (!canCreatePartition || !bestDiskForNew) return;
@@ -360,31 +361,15 @@ function TabManual({ wizard, onChange, eligibleDisks }) {
     onChange({ manualPartitions: np });
   };
 
-  // Validations
-  const validations = [];
-  const warnings = [];
-  
-  diskValidations.forEach(res => {
-    validations.push(...res.errors);
-    warnings.push(...res.warnings);
-  });
-  
-  const hasRoot = parts.some(p => p.mountpoint === '/');
-  const hasEfi = parts.some(p => p.usage === 'efi' || p.mountpoint === '/boot' || p.mountpoint === '/boot/efi');
-  const bootMode = wizard.sysDisk?.boot_mode || 'uefi';
-  
-  if (!hasRoot) validations.push('Falta partição root (/)');
-  if (bootMode === 'uefi' && !hasEfi) validations.push('Falta partição EFI (obrigatória em UEFI)');
-  
-  const mps = parts.map(p => p.mountpoint).filter(Boolean);
-  if (new Set(mps).size !== mps.length) validations.push('Existem pontos de montagem duplicados');
+  const validations = state.validations;
+  const warnings = state.warnings;
 
   return (
     <div className="p-4">
       <div className="flex items-center justify-between mb-4">
-        <h3 className="text-sm font-bold text-white">Particionamento Manual</h3>
+        <h3 className="text-sm font-bold text-white">{t('partitioning.manual.title')}</h3>
         <button type="button" onClick={addPartition} disabled={!canCreatePartition} className={`px-3 py-1.5 text-xs font-bold rounded transition-colors ${canCreatePartition ? 'bg-accent-blue text-black hover:bg-accent-blue/80' : 'bg-white/10 text-slate-500 cursor-not-allowed'}`}>
-          Nova Partição
+          {t('partitioning.manual.newPartition')}
         </button>
       </div>
 
@@ -392,19 +377,19 @@ function TabManual({ wizard, onChange, eligibleDisks }) {
         <table className="w-full text-left text-xs text-slate-300">
           <thead className="bg-white/5 uppercase tracking-wider text-[10px] font-bold text-slate-400">
             <tr>
-              <th className="px-4 py-3">Disco</th>
-              <th className="px-4 py-3">Tamanho</th>
-              <th className="px-4 py-3">Uso</th>
-              <th className="px-4 py-3">FS</th>
-              <th className="px-4 py-3">Rótulo (Label)</th>
-              <th className="px-4 py-3">Mountpoint</th>
-              <th className="px-4 py-3 text-right">Ação</th>
+              <th className="px-4 py-3">{t('partitioning.manual.disk')}</th>
+              <th className="px-4 py-3">{t('partitioning.manual.size')}</th>
+              <th className="px-4 py-3">{t('partitioning.manual.usage')}</th>
+              <th className="px-4 py-3">{t('partitioning.manual.filesystem')}</th>
+              <th className="px-4 py-3">{t('partitioning.manual.label')}</th>
+              <th className="px-4 py-3">{t('partitioning.manual.mountpoint')}</th>
+              <th className="px-4 py-3 text-right">{t('partitioning.manual.action')}</th>
             </tr>
           </thead>
           <tbody className="divide-y divide-white/5">
             {parts.length === 0 ? (
               <tr>
-                <td colSpan="7" className="px-4 py-8 text-center text-slate-400 italic">Nenhuma partição definida</td>
+                <td colSpan="7" className="px-4 py-8 text-center text-slate-400 italic">{t('partitioning.manual.empty')}</td>
               </tr>
             ) : parts.map((p, i) => (
               <tr key={p.id || i} className="hover:bg-white/[0.02]">
@@ -422,8 +407,8 @@ function TabManual({ wizard, onChange, eligibleDisks }) {
                     <option value="root">Root</option>
                     <option value="home">Home</option>
                     <option value="swap">Swap</option>
-                    <option value="data">Dados</option>
-                    <option value="custom">Custom</option>
+                    <option value="data">{t('partitioning.manual.data')}</option>
+                    <option value="custom">{t('partitioning.manual.custom')}</option>
                   </select>
                 </td>
                 <td className="px-4 py-2">
@@ -439,7 +424,7 @@ function TabManual({ wizard, onChange, eligibleDisks }) {
                   <input type="text" className="input-shell text-xs py-1 px-2 w-24" value={p.label || ''} onChange={e => updatePart(i, { label: e.target.value })} placeholder="kryonix-root" />
                 </td>
                 <td className="px-4 py-2">
-                  <input type="text" className="input-shell text-xs py-1 px-2 w-24" value={p.mountpoint || ''} onChange={e => updatePart(i, { mountpoint: e.target.value })} disabled={p.usage === 'swap' || p.fstype === 'swap'} placeholder={p.usage === 'swap' ? 'N/A' : '/'} title={p.usage === 'swap' ? 'Swap não usa ponto de montagem' : ''} />
+                  <input type="text" className="input-shell text-xs py-1 px-2 w-24" value={p.mountpoint || ''} onChange={e => updatePart(i, { mountpoint: e.target.value })} disabled={p.usage === 'swap' || p.fstype === 'swap'} placeholder={p.usage === 'swap' ? 'N/A' : '/'} title={p.usage === 'swap' ? t('partitioning.manual.swapDoesNotUseMountpoint') : ''} />
                 </td>
                 <td className="px-4 py-2 text-right">
                   <button type="button" onClick={() => {
@@ -454,7 +439,7 @@ function TabManual({ wizard, onChange, eligibleDisks }) {
 
       {validations.length > 0 && (
         <div className="mb-6 bg-danger/10 border border-danger/20 rounded-xl p-4 text-danger text-sm">
-          <strong className="block mb-2">Erros de Validação:</strong>
+          <strong className="block mb-2">{t('disks.validation_errors', { defaultValue: 'Erros de Validação:' })}</strong>
           <ul className="list-disc pl-5">
             {validations.map((v, i) => <li key={i}>{v}</li>)}
           </ul>
@@ -463,7 +448,7 @@ function TabManual({ wizard, onChange, eligibleDisks }) {
 
       {warnings.length > 0 && validations.length === 0 && (
         <div className="mb-6 bg-amber-500/10 border border-amber-500/20 rounded-xl p-4 text-amber-500 text-sm">
-          <strong className="block mb-2">Avisos:</strong>
+          <strong className="block mb-2">{t('disks.warnings', { defaultValue: 'Avisos:' })}</strong>
           <ul className="list-disc pl-5">
             {warnings.map((v, i) => <li key={i}>{v}</li>)}
           </ul>

@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { useTranslation } from 'react-i18next';
 
 function HwCard({ icon, label, value, sub }) {
   return (
@@ -33,6 +34,7 @@ function StatusRow({ icon, label, value, ok }) {
 }
 
 export default function Eula({ uiState, onChange, validation }) {
+  const { t } = useTranslation();
   const [probe, setProbe]       = useState(null);
   const [scanning, setScanning] = useState(true);
   const [offline, setOffline]   = useState(false);
@@ -77,20 +79,20 @@ export default function Eula({ uiState, onChange, validation }) {
       <div className="flex-1 flex flex-col gap-6 max-w-sm shrink-0">
         <div className="flex flex-col gap-1.5">
           <h2 className="text-base font-bold text-slate-900 dark:text-text-primary">
-            Ambiente Detectado
+            {t('eula.detectedEnv', { defaultValue: 'Ambiente Detectado' })}
           </h2>
           {scanning ? (
             <div className="flex items-center gap-2 text-xs text-slate-500 dark:text-text-secondary">
               <div className="w-2 h-2 rounded-full bg-accent-blue animate-pulse" />
-              Verificando hardware...
+              {t('eula.verifyingHw', { defaultValue: 'Verificando hardware...' })}
             </div>
           ) : offline ? (
             <div className="flex items-center gap-2 text-xs font-medium text-danger">
-              <span className="shrink-0">✗</span> MOCK MODE: Dados simulados
+              <span className="shrink-0">✗</span> {t('eula.mockMode', { defaultValue: 'MOCK MODE: Dados simulados' })}
             </div>
           ) : (
             <div className="flex items-center gap-2 text-xs font-medium text-success">
-              <span className="shrink-0">✓</span> Diagnóstico concluído
+              <span className="shrink-0">✓</span> {t('eula.diagnosticDone', { defaultValue: 'Diagnóstico concluído' })}
             </div>
           )}
         </div>
@@ -98,7 +100,7 @@ export default function Eula({ uiState, onChange, validation }) {
         <div className="grid grid-cols-2 gap-3">
           <HwCard icon="⬡" label="CPU"   value={cpuLabel} sub={cpuSub} />
           <HwCard icon="▣" label="RAM"   value={memVal}   sub={memSub} />
-          <HwCard icon="◈" label="Disco" value={diskVal}  sub={diskSub} />
+          <HwCard icon="◈" label={t('eula.disk', { defaultValue: 'Disco' })} value={diskVal}  sub={diskSub} />
           <HwCard icon="◇" label="GPU"   value={gpuVal}   sub={gpuSub} />
         </div>
 
@@ -112,18 +114,18 @@ export default function Eula({ uiState, onChange, validation }) {
           <StatusRow
             icon="◎"
             label="Internet"
-            value={net?.internet ? 'Conectado' : net ? 'Offline' : '—'}
+            value={net?.internet ? t('common.connected', { defaultValue: 'Conectado' }) : net ? t('common.offline', { defaultValue: 'Offline' }) : '—'}
             ok={net?.internet === true ? true : net ? false : null}
           />
           <StatusRow
             icon="⬡"
-            label="Virtualização"
+            label={t('eula.virtualization', { defaultValue: 'Virtualização' })}
             value={virt ?? '—'}
             ok={null}
           />
           <StatusRow
             icon="◈"
-            label="Interface"
+            label={t('eula.interface', { defaultValue: 'Interface' })}
             value={net?.interface ?? '—'}
             ok={null}
           />
@@ -134,32 +136,32 @@ export default function Eula({ uiState, onChange, validation }) {
       <div className="flex-[1.5] flex flex-col min-w-0 bg-white/50 dark:bg-bg-elevated/30 border border-slate-200/50 dark:border-white/5 rounded-2xl p-6 shadow-sm relative overflow-hidden animate-fade-in-up">
 
         <div className="shrink-0 mb-6">
-          <h2 className="text-xl font-bold tracking-tight text-slate-900 dark:text-text-primary">Termos de Operação</h2>
+          <h2 className="text-xl font-bold tracking-tight text-slate-900 dark:text-text-primary">{t('eula.termsTitle', { defaultValue: 'Termos de Operação' })}</h2>
           <p className="text-sm font-medium text-slate-500 dark:text-text-secondary mt-2">
-            Por favor, analise as implicações do processo destrutivo antes de prosseguir.
+            {t('eula.termsSubtitle', { defaultValue: 'Por favor, analise as implicações do processo destrutivo antes de prosseguir.' })}
           </p>
         </div>
 
         <div className="flex-1 overflow-y-auto pr-2 pb-4 space-y-4 text-sm text-slate-600 dark:text-text-secondary custom-scrollbar">
           <div className="flex gap-3">
             <span className="font-bold text-accent-blue">1.</span>
-            <p>O sistema KryonixOS será instalado com perfil canônico, substituindo qualquer OS anterior na partição selecionada.</p>
+            <p>{t('eula.term1', { defaultValue: 'O sistema KryonixOS será instalado com perfil canônico, substituindo qualquer OS anterior na partição selecionada.' })}</p>
           </div>
           <div className="flex gap-3">
             <span className="font-bold text-accent-blue">2.</span>
-            <p>A etapa de armazenamento <strong>pode ser destrutiva</strong>. O particionamento automático apagará a tabela de partições do disco alvo.</p>
+            <p dangerouslySetInnerHTML={{ __html: t('eula.term2', { defaultValue: 'A etapa de armazenamento <strong>pode ser destrutiva</strong>. O particionamento automático apagará a tabela de partições do disco alvo.' }) }}></p>
           </div>
           <div className="flex gap-3">
             <span className="font-bold text-accent-blue">3.</span>
-            <p>Você é responsável por revisar cuidadosamente a seleção de discos, interfaces de rede, região e senhas de administração.</p>
+            <p>{t('eula.term3', { defaultValue: 'Você é responsável por revisar cuidadosamente a seleção de discos, interfaces de rede, região e senhas de administração.' })}</p>
           </div>
           <div className="flex gap-3">
             <span className="font-bold text-accent-blue">4.</span>
-            <p>Falhas de fornecimento de energia durante o processo de flash (após o início da escrita de blocos) podem corromper a unidade.</p>
+            <p>{t('eula.term4', { defaultValue: 'Falhas de fornecimento de energia durante o processo de flash (após o início da escrita de blocos) podem corromper a unidade.' })}</p>
           </div>
           <div className="flex gap-3">
             <span className="font-bold text-accent-blue">5.</span>
-            <p>Garanta que possui backup de qualquer dado importante contido no hardware listado na coluna de diagnóstico.</p>
+            <p>{t('eula.term5', { defaultValue: 'Garanta que possui backup de qualquer dado importante contido no hardware listado na coluna de diagnóstico.' })}</p>
           </div>
         </div>
 
@@ -177,10 +179,10 @@ export default function Eula({ uiState, onChange, validation }) {
             />
             <div className="flex flex-col">
               <span className={`text-[15px] font-bold ${uiState.eulaAccepted ? 'text-white' : 'text-[#e8eef8]'}`}>
-                Compreendo os riscos e aceito os termos
+                {t('eula.acceptTitle', { defaultValue: 'Compreendo os riscos e aceito os termos' })}
               </span>
               <span className={`text-[13px] font-medium mt-1 ${uiState.eulaAccepted ? 'text-accent-blue/90' : 'text-[#9fb0c8]'}`}>
-                Confirmo que verifiquei os dados do ambiente detectado e autorizo a instalação.
+                {t('eula.acceptDesc', { defaultValue: 'Confirmo que verifiquei os dados do ambiente detectado e autorizo a instalação.' })}
               </span>
             </div>
           </label>

@@ -1,4 +1,5 @@
 import { useMemo, useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import {
   PRESETS,
   buildCurrentBlocks,
@@ -49,6 +50,7 @@ function Bar({ title, blocks }) {
  *  - onOpenManual(): abre a edição detalhada
  */
 export default function DiskVisualizer({ disk, onApply, onOpenManual }) {
+  const { t } = useTranslation();
   const [presetId, setPresetId] = useState(null);
   const [pendingDestructive, setPendingDestructive] = useState(null);
 
@@ -89,13 +91,13 @@ export default function DiskVisualizer({ disk, onApply, onOpenManual }) {
     <section className="rounded-2xl border border-slate-700/50 bg-slate-900/30 p-5">
       <header className="mb-4 flex items-baseline justify-between gap-4">
         <div>
-          <h3 className="text-base font-bold text-slate-100">{disk?.model || disk?.name || disk?.path || 'Disco'}</h3>
+          <h3 className="text-base font-bold text-slate-100">{disk?.model || disk?.name || disk?.path || t('disk_visualizer.disk_default_name', { defaultValue: 'Disco' })}</h3>
           <div className="text-xs text-slate-500">{disk?.path} · {formatBytes(total)}</div>
         </div>
       </header>
 
-      <Bar title="Atual" blocks={currentBlocks} />
-      <Bar title="Proposto" blocks={proposed?.blocks ?? []} />
+      <Bar title={t('disk_visualizer.current', { defaultValue: 'Atual' })} blocks={currentBlocks} />
+      <Bar title={t('disk_visualizer.proposed', { defaultValue: 'Proposto' })} blocks={proposed?.blocks ?? []} />
 
       <div className="mt-4 flex flex-wrap gap-2">
         {PRESETS.map((preset) => (
@@ -128,23 +130,23 @@ export default function DiskVisualizer({ disk, onApply, onOpenManual }) {
         onClick={requestApply}
         className="mt-4 rounded-lg border border-cyan-400/50 bg-cyan-400/10 px-4 py-2 text-sm font-semibold text-cyan-100 disabled:cursor-not-allowed disabled:opacity-40"
       >
-        Aplicar layout
+        {t('disk_visualizer.apply_layout', { defaultValue: 'Aplicar layout' })}
       </button>
 
       {pendingDestructive ? (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4" role="dialog" aria-modal="true">
           <div className="w-full max-w-md rounded-2xl border border-rose-400/40 bg-slate-900 p-6">
-            <h4 className="text-lg font-bold text-rose-200">Confirmar operação destrutiva</h4>
+            <h4 className="text-lg font-bold text-rose-200">{t('disk_visualizer.confirm_destructive', { defaultValue: 'Confirmar operação destrutiva' })}</h4>
             <p className="mt-2 text-sm text-slate-300">
-              O preset <strong>{PRESETS.find((p) => p.id === presetId)?.label}</strong> vai
-              <strong className="text-rose-300"> apagar todos os dados</strong> de {disk?.path}. Esta ação é irreversível.
+              {t('disk_visualizer.preset_will_erase_1', { defaultValue: 'O preset ' })}<strong>{PRESETS.find((p) => p.id === presetId)?.label}</strong>{t('disk_visualizer.preset_will_erase_2', { defaultValue: ' vai ' })}
+              <strong className="text-rose-300"> {t('disk_visualizer.erase_all_data', { defaultValue: 'apagar todos os dados' })}</strong> {t('disk_visualizer.of_disk', { defaultValue: 'de ' })}{disk?.path}. {t('disk_visualizer.irreversible', { defaultValue: 'Esta ação é irreversível.' })}
             </p>
             <div className="mt-5 flex justify-end gap-3">
               <button type="button" onClick={() => setPendingDestructive(null)}
-                className="rounded-lg border border-slate-600 px-4 py-2 text-sm text-slate-300">Cancelar</button>
+                className="rounded-lg border border-slate-600 px-4 py-2 text-sm text-slate-300">{t('disk_visualizer.cancel', { defaultValue: 'Cancelar' })}</button>
               <button type="button" onClick={confirmDestructive}
                 className="rounded-lg border border-rose-400/60 bg-rose-500/20 px-4 py-2 text-sm font-semibold text-rose-100">
-                Apagar e aplicar
+                {t('disk_visualizer.erase_and_apply', { defaultValue: 'Apagar e aplicar' })}
               </button>
             </div>
           </div>

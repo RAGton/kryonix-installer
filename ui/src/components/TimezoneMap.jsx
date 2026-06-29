@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import { timezoneRegions } from '../data/timezoneRegions.js';
 import {
   CALAMARES_BG_IMAGE,
@@ -78,6 +79,7 @@ function findZoneOverlayKey(location, layers) {
 }
 
 export default function TimezoneMap({ locations = [], selectedLocation, value, onChange }) {
+  const { t } = useTranslation();
   const mapPlaneRef = useRef(null);
   const [layerState, setLayerState] = useState({ loading: true, layers: new Map(), error: '' });
   const [flightAngle, setFlightAngle] = useState(0);
@@ -200,13 +202,13 @@ export default function TimezoneMap({ locations = [], selectedLocation, value, o
     <div className="section-panel relative flex h-full min-h-0 w-full flex-col overflow-hidden p-2 lg:p-3">
       <div className="mb-3 flex items-start justify-between gap-3 px-1">
         <div>
-          <h3 className="text-xl font-black text-slate-900 dark:text-white">Mapa global</h3>
+          <h3 className="text-xl font-black text-slate-900 dark:text-white">{t('timezone_map.global_map', { defaultValue: 'Mapa global' })}</h3>
           <p className="mt-1 text-[13px] font-medium text-slate-500 dark:text-slate-400">
-            Selecione a região no mapa. Baseado no motor original do Calamares.
+            {t('timezone_map.select_region', { defaultValue: 'Selecione a região no mapa. Baseado no motor original do Calamares.' })}
           </p>
         </div>
         <div className="metric-chip bg-accent-blue/10 text-accent-blue border-accent-blue/20">
-          {activeLocation?.label || value || 'Nenhum fuso selecionado'}
+          {activeLocation?.label || value || t('timezone_map.no_timezone_selected', { defaultValue: 'Nenhum fuso selecionado' })}
         </div>
       </div>
 
@@ -219,7 +221,7 @@ export default function TimezoneMap({ locations = [], selectedLocation, value, o
         >
           <img
             src={CALAMARES_BG_IMAGE}
-            alt="Mapa de fusos horários inspirado no Calamares"
+            alt={t('timezone_map.map_alt', { defaultValue: 'Mapa de fusos horários inspirado no Calamares' })}
             className="absolute inset-0 h-full w-full object-fill select-none"
             draggable="false"
           />
@@ -227,7 +229,7 @@ export default function TimezoneMap({ locations = [], selectedLocation, value, o
           {activeOverlaySrc ? (
             <img
               src={activeOverlaySrc}
-              alt="Faixa de timezone selecionada"
+              alt={t('timezone_map.timezone_band_alt', { defaultValue: 'Faixa de timezone selecionada' })}
               className="absolute inset-0 h-full w-full object-fill opacity-95 mix-blend-screen select-none"
               draggable="false"
             />
@@ -278,14 +280,14 @@ export default function TimezoneMap({ locations = [], selectedLocation, value, o
               {Number(activeLocation.latitude).toFixed(4)}, {Number(activeLocation.longitude).toFixed(4)}
             </div>
             {activeOverlayKey ? (
-              <div className="mt-1.5 text-[11px] font-bold tracking-wide text-accent-blue/80 uppercase">Banda visual: UTC {activeOverlayKey}</div>
+              <div className="mt-1.5 text-[11px] font-bold tracking-wide text-accent-blue/80 uppercase">{t('timezone_map.visual_band', { defaultValue: 'Banda visual: UTC ' })}{activeOverlayKey}</div>
             ) : null}
           </div>
         ) : null}
 
         {(layerState.loading || layerState.error) ? (
           <div className="pointer-events-none absolute bottom-4 right-4 rounded-2xl border border-white/10 bg-slate-950/88 px-3 py-2 text-xs text-slate-300 backdrop-blur-xl">
-            {layerState.loading ? 'Carregando máscaras de timezone do Calamares…' : layerState.error}
+            {layerState.loading ? t('timezone_map.loading_masks', { defaultValue: 'Carregando máscaras de timezone do Calamares…' }) : layerState.error}
           </div>
         ) : null}
       </div>

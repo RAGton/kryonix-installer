@@ -1,4 +1,5 @@
 import React, { useState, useRef, useEffect } from 'react';
+import { useTranslation } from 'react-i18next';
 
 export default function KxCombobox({
   options = [],
@@ -10,6 +11,7 @@ export default function KxCombobox({
   disabled = false,
   maxItems = 6
 }) {
+  const { t } = useTranslation();
   const [isOpen, setIsOpen] = useState(false);
   const [search, setSearch] = useState('');
   const containerRef = useRef(null);
@@ -85,7 +87,7 @@ export default function KxCombobox({
           <div className="max-h-[240px] overflow-y-auto p-1">
             {displayOptions.length === 0 ? (
               <div className="px-3 py-4 text-center text-[12px] text-slate-500 dark:text-slate-400">
-                Nenhum resultado encontrado.
+                {t('combobox.no_results', { defaultValue: 'Nenhum resultado encontrado.' })}
               </div>
             ) : (
               displayOptions.map((opt) => {
@@ -125,7 +127,7 @@ export default function KxCombobox({
             
             {filteredOptions.length > maxItems && (
               <div className="px-3 py-2 text-center text-[10px] font-bold uppercase tracking-widest text-slate-400">
-                + {filteredOptions.length - maxItems} resultados (refine a busca)
+                + {filteredOptions.length - maxItems} {t('combobox.more_results', { defaultValue: 'resultados (refine a busca)' })}
               </div>
             )}
           </div>

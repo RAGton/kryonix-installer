@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import FieldError from '../components/FieldError.jsx';
 import TimezoneMap from '../components/TimezoneMap.jsx';
 import KxCombobox from '../components/KxCombobox.jsx';
@@ -65,6 +66,7 @@ function mergeTimezoneLocations(timezones, locations) {
 }
 
 export default function Timezone({ wizard, onChange, validation }) {
+  const { t } = useTranslation();
   const [timezones, setTimezones] = useState([]);
   const [timezoneLocations, setTimezoneLocations] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -101,7 +103,7 @@ export default function Timezone({ wizard, onChange, validation }) {
         setTimezoneLocations(locations.length > 0 ? locations : timezoneRegions);
 
         if (listResult.status !== 'fulfilled' && locationsResult.status !== 'fulfilled') {
-          nextError = 'Backend indisponível para timezones. Usando catálogo interno.';
+          nextError = t('timezone.backend_unavailable', { defaultValue: 'Backend indisponível para timezones. Usando catálogo interno.' });
         }
       } finally {
         if (!cancelled) {
@@ -115,7 +117,7 @@ export default function Timezone({ wizard, onChange, validation }) {
     return () => {
       cancelled = true;
     };
-  }, []);
+  }, [t]);
 
   const mergedLocations = useMemo(
     () => mergeTimezoneLocations(timezones, timezoneLocations),
@@ -222,8 +224,8 @@ export default function Timezone({ wizard, onChange, validation }) {
               const loc = mergedLocations.find(l => l.timezone === id);
               if (loc) applyLocation(loc);
             }}
-            placeholder={loading ? 'Carregando timezones...' : 'Buscar cidade ou fuso horário...'}
-            searchPlaceholder="Buscar por IANA, cidade..."
+            placeholder={loading ? t('timezone.loading_timezones', { defaultValue: 'Carregando timezones...' }) : t('timezone.search_placeholder', { defaultValue: 'Buscar cidade ou fuso horário...' })}
+            searchPlaceholder={t('timezone.search_iana', { defaultValue: 'Buscar por IANA, cidade...' })}
             disabled={loading}
             maxItems={8}
           />
@@ -241,13 +243,13 @@ export default function Timezone({ wizard, onChange, validation }) {
 
         {error && (
           <div className="mt-4 text-[11px] font-medium text-warning dark:text-warning">
-            <span className="font-bold">Aviso:</span> {error}
+            <span className="font-bold">{t('timezone.warning_prefix', { defaultValue: 'Aviso:' })}</span> {error}
           </div>
         )}
 
         {quickSuggestions.length > 0 && (
           <div className="mt-4 flex flex-wrap items-center gap-2">
-            <span className="text-[11px] font-bold uppercase tracking-widest text-slate-500 dark:text-slate-400">Sugestões:</span>
+            <span className="text-[11px] font-bold uppercase tracking-widest text-slate-500 dark:text-slate-400">{t('timezone.suggestions', { defaultValue: 'Sugestões:' })}</span>
             {quickSuggestions.map(tz => {
               const tzLoc = mergedLocations.find(l => l.timezone === tz);
               if (!tzLoc) return null;
@@ -275,7 +277,7 @@ export default function Timezone({ wizard, onChange, validation }) {
         <div className="flex flex-col gap-5">
           <div>
             <h3 className="mb-4 text-[11px] font-bold uppercase tracking-widest text-slate-500 dark:text-slate-400">
-              Fuso Selecionado
+              {t('timezone.selected_timezone', { defaultValue: 'Fuso Selecionado' })}
             </h3>
             <div className="text-[15px] font-bold text-accent-blue break-all">
               {wizard.timeZone || '—'}
@@ -295,27 +297,27 @@ export default function Timezone({ wizard, onChange, validation }) {
                 }))}
               >
                 <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
-                Mudar para UTC
+                {t('timezone.switch_utc', { defaultValue: 'Mudar para UTC' })}
               </button>
             )}
           </div>
 
           <div className="border-t border-slate-200/50 pt-5 dark:border-white/5">
-            <div className="text-[10px] uppercase text-slate-400 dark:text-slate-500 font-bold">Localidade</div>
+            <div className="text-[10px] uppercase text-slate-400 dark:text-slate-500 font-bold">{t('timezone.location', { defaultValue: 'Localidade' })}</div>
             <div className="text-[13px] font-semibold text-slate-900 dark:text-white mt-1">
               {selectedLocation?.label ? `${selectedLocation.label} — ${selectedLocation.group}` : '—'}
             </div>
           </div>
 
           <div className="border-t border-slate-200/50 pt-5 dark:border-white/5">
-            <div className="text-[10px] uppercase text-slate-400 dark:text-slate-500 font-bold">Hora Local Prevista</div>
+            <div className="text-[10px] uppercase text-slate-400 dark:text-slate-500 font-bold">{t('timezone.expected_local_time', { defaultValue: 'Hora Local Prevista' })}</div>
             <div className="text-2xl font-bold text-slate-900 dark:text-white mt-1 tracking-tight">
               {formattedTime}
             </div>
           </div>
 
           <div className="border-t border-slate-200/50 pt-5 dark:border-white/5">
-            <div className="text-[10px] uppercase text-slate-400 dark:text-slate-500 font-bold">UTC Offset</div>
+            <div className="text-[10px] uppercase text-slate-400 dark:text-slate-500 font-bold">{t('timezone.utc_offset', { defaultValue: 'UTC Offset' })}</div>
             <div className="text-[13px] font-semibold text-slate-600 dark:text-slate-400 mt-1">
               {(() => {
                 if (!wizard.timeZone) return '—';
@@ -335,7 +337,7 @@ export default function Timezone({ wizard, onChange, validation }) {
 
           {selectedLocation?.latitude !== undefined && selectedLocation?.longitude !== undefined && (
             <div className="border-t border-slate-200/50 pt-5 dark:border-white/5">
-              <div className="text-[10px] uppercase text-slate-400 dark:text-slate-500 font-bold">Coordenadas</div>
+              <div className="text-[10px] uppercase text-slate-400 dark:text-slate-500 font-bold">{t('timezone.coordinates', { defaultValue: 'Coordenadas' })}</div>
               <div className="text-[12px] font-medium text-slate-500 dark:text-slate-500 mt-1">
                 {Number(selectedLocation.latitude).toFixed(4)}, {Number(selectedLocation.longitude).toFixed(4)}
               </div>

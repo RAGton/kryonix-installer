@@ -1,10 +1,13 @@
+import { useTranslation } from 'react-i18next';
+
 export default function ErrorDiagnosisPanel({ errorPayload, onDismiss }) {
+  const { t } = useTranslation();
   if (!errorPayload) return null;
 
   const isStructuredError = typeof errorPayload === 'object' && errorPayload.code;
   const message = isStructuredError ? errorPayload.message : String(errorPayload);
   const code = isStructuredError ? errorPayload.code : 'UNKNOWN_ERROR';
-  const action = isStructuredError ? errorPayload.action : 'Consulte os logs para mais detalhes.';
+  const action = isStructuredError ? errorPayload.action : t('error_diagnosis.consult_logs', { defaultValue: 'Consulte os logs para mais detalhes.' });
   const details = isStructuredError && errorPayload.details ? JSON.stringify(errorPayload.details, null, 2) : '';
 
   const copyDiagnosis = () => {
@@ -21,7 +24,7 @@ export default function ErrorDiagnosisPanel({ errorPayload, onDismiss }) {
             </svg>
           </div>
           <div>
-            <h3 className="text-lg font-bold text-white leading-tight">Falha Estruturada ({code})</h3>
+            <h3 className="text-lg font-bold text-white leading-tight">{t('error_diagnosis.structured_failure', { defaultValue: 'Falha Estruturada' })} ({code})</h3>
             <p className="text-danger font-medium text-sm mt-0.5">{message}</p>
           </div>
         </div>
@@ -30,7 +33,7 @@ export default function ErrorDiagnosisPanel({ errorPayload, onDismiss }) {
           <button 
             onClick={onDismiss}
             className="text-text2 hover:text-white transition-colors p-1"
-            title="Fechar"
+            title={t('error_diagnosis.close', { defaultValue: 'Fechar' })}
           >
             <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
@@ -42,14 +45,14 @@ export default function ErrorDiagnosisPanel({ errorPayload, onDismiss }) {
       <div className="p-6 space-y-4">
         {action && (
           <div className="bg-bg-elevated rounded-lg p-4 border border-border">
-            <h4 className="text-xs font-bold uppercase tracking-widest text-primary mb-1">Ação Recomendada</h4>
+            <h4 className="text-xs font-bold uppercase tracking-widest text-primary mb-1">{t('error_diagnosis.recommended_action', { defaultValue: 'Ação Recomendada' })}</h4>
             <p className="text-sm text-text">{action}</p>
           </div>
         )}
 
         {details && (
           <div className="space-y-2">
-             <h4 className="text-xs font-bold uppercase tracking-widest text-text2">Detalhes Técnicos</h4>
+             <h4 className="text-xs font-bold uppercase tracking-widest text-text2">{t('error_diagnosis.technical_details', { defaultValue: 'Detalhes Técnicos' })}</h4>
              <div className="relative">
                <pre className="bg-black/50 p-4 rounded-lg border border-border/50 text-xs text-text2 overflow-auto font-mono max-h-48">
                  {details}
@@ -57,9 +60,9 @@ export default function ErrorDiagnosisPanel({ errorPayload, onDismiss }) {
                <button 
                  onClick={copyDiagnosis}
                  className="absolute top-2 right-2 bg-bg2/80 hover:bg-bg2 border border-border rounded px-2 py-1 text-xs text-text2 hover:text-white transition-colors"
-                 title="Copiar Payload JSON"
+                 title={t('error_diagnosis.copy_json_payload', { defaultValue: 'Copiar Payload JSON' })}
                >
-                 Copiar
+                 {t('error_diagnosis.copy', { defaultValue: 'Copiar' })}
                </button>
              </div>
           </div>

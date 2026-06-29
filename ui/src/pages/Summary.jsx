@@ -5,21 +5,20 @@ import { FEATURE_CATALOG } from '../data/featureCatalog.js';
 import { getProfileById } from '../data/profileCatalog.js';
 import { shouldRecommendSrvData, explainSrvDataReason } from '../utils/storagePlanner.js';
 
-// Mapeia os ids internos do `sourceKind` para rótulos amigáveis. Evita que
-// slugs cruos como "offline-cache" ou strings vazias vazem para o Summary.
-const SOURCE_KIND_LABELS = {
-  'offline-defaults': 'Offline (ISO base)',
-  'offline-cache': 'Offline (cache local)',
-  'remote-github': 'GitHub (remoto)',
-};
-
-function formatSourceKind(value) {
-  if (!value) return 'Não selecionada';
-  return SOURCE_KIND_LABELS[value] || 'Não selecionada';
-}
-
 export default function Summary({ wizard, uiState, onChange, validation }) {
   const { t } = useTranslation();
+
+  const SOURCE_KIND_LABELS = {
+    'offline-defaults': t('summary.source_offline_base', { defaultValue: 'Offline (ISO base)' }),
+    'offline-cache': t('summary.source_offline_cache', { defaultValue: 'Offline (cache local)' }),
+    'remote-github': t('summary.source_github', { defaultValue: 'GitHub (remoto)' }),
+  };
+
+  const formatSourceKind = (value) => {
+    if (!value) return t('summary.not_selected', { defaultValue: 'Não selecionada' });
+    return SOURCE_KIND_LABELS[value] || t('summary.not_selected', { defaultValue: 'Não selecionada' });
+  };
+
   const sshCount = String(wizard.adminAuthorizedKeys || '')
     .split('\n')
     .map((item) => item.trim())
@@ -32,8 +31,8 @@ export default function Summary({ wizard, uiState, onChange, validation }) {
       : 'single disk';
 
   const networkSummary = wizard.mgmtMode === 'dhcp'
-    ? 'DHCP (automático)'
-    : `IP: ${wizard.serverIp || 'pendente'} • GW: ${wizard.mgmtGateway || 'pendente'}`;
+    ? t('summary.dhcp_auto', { defaultValue: 'DHCP (automático)' })
+    : `IP: ${wizard.serverIp || t('summary.pending', { defaultValue: 'pendente' })} • GW: ${wizard.mgmtGateway || t('summary.pending', { defaultValue: 'pendente' })}`;
 
   const hasDedicatedData = wizard.diskMode === 'two' || wizard.diskProfile === 'raid';
 
@@ -109,7 +108,7 @@ export default function Summary({ wizard, uiState, onChange, validation }) {
         const json = JSON.parse(e.target.result);
         // Basic validation: check required top-level fields
         if (!json.version || !json.network || !json.disk || !json.admin) {
-          throw new Error('JSON não contém campos obrigatórios do plano de instalação.');
+          throw new Error(t('summary.json_missing_fields', { defaultValue: 'JSON não contém campos obrigatórios do plano de instalação.' }));
         }
         // Convert payload back to wizard draft fields where possible
         const draftPatch = {};
@@ -163,12 +162,12 @@ export default function Summary({ wizard, uiState, onChange, validation }) {
         event.target.value = '';
       } catch (err) {
         console.error('[Summary] Import error:', err);
-        setImportError(err instanceof Error ? err.message : 'Falha ao importar JSON.');
+        setImportError(err instanceof Error ? err.message : t('summary.import_failed', { defaultValue: 'Falha ao importar JSON.' }));
       }
     };
-    reader.onerror = () => setImportError('Erro ao ler arquivo.');
+    reader.onerror = () => setImportError(t('summary.read_error', { defaultValue: 'Erro ao ler arquivo.' }));
     reader.readAsText(file);
-  }, [onChange]);
+  }, [onChange, t]);
 
   return (
     <div className="grid h-full min-h-0 gap-6 lg:grid-cols-[7fr_3fr] animate-fade-in-up">
@@ -177,37 +176,37 @@ export default function Summary({ wizard, uiState, onChange, validation }) {
 
         <div className="grid gap-4 md:grid-cols-2">
           <div className="bg-white/50 dark:bg-bg-elevated/30 border border-slate-200/50 dark:border-white/5 rounded-xl p-4 shadow-sm transition-all hover:bg-white/80 dark:hover:bg-bg-elevated/50">
-            <div className="text-[10px] font-bold uppercase tracking-widest text-slate-500 dark:text-text-muted">Instalação & Host</div>
-            <div className="mt-2 text-sm font-semibold text-slate-900 dark:text-text-primary">Hostname: {wizard.hostName || 'pendente'}</div>
-            <div className="mt-1 text-[13px] text-slate-600 dark:text-text-secondary">Fonte: {formatSourceKind(wizard.sourceKind)}</div>
-            <div className="mt-1 text-[13px] text-slate-500 dark:text-text-muted">Acesso Remoto: {wizard.targetRemoteAccessEnabled ? 'Ativado' : 'Desativado'}</div>
+            <div className="text-[10px] font-bold uppercase tracking-widest text-slate-500 dark:text-text-muted">{t('summary.install_host', { defaultValue: 'Instalação & Host' })}</div>
+            <div className="mt-2 text-sm font-semibold text-slate-900 dark:text-text-primary">{t('summary.hostname', { defaultValue: 'Hostname:' })} {wizard.hostName || t('summary.pending', { defaultValue: 'pendente' })}</div>
+            <div className="mt-1 text-[13px] text-slate-600 dark:text-text-secondary">{t('summary.source', { defaultValue: 'Fonte:' })} {formatSourceKind(wizard.sourceKind)}</div>
+            <div className="mt-1 text-[13px] text-slate-500 dark:text-text-muted">{t('summary.remote_access', { defaultValue: 'Acesso Remoto:' })} {wizard.targetRemoteAccessEnabled ? t('summary.enabled', { defaultValue: 'Ativado' }) : t('summary.disabled', { defaultValue: 'Desativado' })}</div>
             <div className="mt-1 text-[13px] text-slate-500 dark:text-text-muted">
-              Perfil: {profileObj ? profileObj.name : 'Nenhum'}
+              {t('summary.profile', { defaultValue: 'Perfil:' })} {profileObj ? profileObj.name : t('summary.none', { defaultValue: 'Nenhum' })}
             </div>
           </div>
           <div className="bg-white/50 dark:bg-bg-elevated/30 border border-slate-200/50 dark:border-white/5 rounded-xl p-4 shadow-sm transition-all hover:bg-white/80 dark:hover:bg-bg-elevated/50">
             <div className="text-[10px] font-bold uppercase tracking-widest text-slate-500 dark:text-text-muted">{t('summary.network')}</div>
-            <div className="mt-2 text-sm font-semibold text-slate-900 dark:text-text-primary">WAN: {wizard.wanInterface ? `${wizard.wanInterface} • modo ${wizard.wanMode}` : 'opcional / desabilitada'}</div>
-            <div className="mt-1 text-[13px] text-slate-600 dark:text-text-secondary">LAN/PXE: {wizard.mgmtInterface || 'sem interface'}</div>
+            <div className="mt-2 text-sm font-semibold text-slate-900 dark:text-text-primary">{t('summary.wan', { defaultValue: 'WAN:' })} {wizard.wanInterface ? `${wizard.wanInterface} • ${t('summary.mode', { defaultValue: 'modo' })} ${wizard.wanMode}` : t('summary.optional_disabled', { defaultValue: 'opcional / desabilitada' })}</div>
+            <div className="mt-1 text-[13px] text-slate-600 dark:text-text-secondary">{t('summary.lan_pxe', { defaultValue: 'LAN/PXE:' })} {wizard.mgmtInterface || t('summary.no_interface', { defaultValue: 'sem interface' })}</div>
             <div className="mt-1 text-[13px] text-slate-500 dark:text-text-muted">{networkSummary}</div>
           </div>
           <div className="bg-white/50 dark:bg-bg-elevated/30 border border-slate-200/50 dark:border-white/5 rounded-xl p-4 shadow-sm transition-all hover:bg-white/80 dark:hover:bg-bg-elevated/50">
-            <div className="text-[10px] font-bold uppercase tracking-widest text-slate-500 dark:text-text-muted">Discos</div>
-            <div className="mt-2 text-sm font-semibold text-slate-900 dark:text-text-primary">Layout: {layoutLabel}</div>
-            <div className="mt-1 text-[13px] text-slate-600 dark:text-text-secondary">Sistema: {wizard.sysDisk || '—'}</div>
+            <div className="text-[10px] font-bold uppercase tracking-widest text-slate-500 dark:text-text-muted">{t('summary.disks', { defaultValue: 'Discos' })}</div>
+            <div className="mt-2 text-sm font-semibold text-slate-900 dark:text-text-primary">{t('summary.layout', { defaultValue: 'Layout:' })} {layoutLabel}</div>
+            <div className="mt-1 text-[13px] text-slate-600 dark:text-text-secondary">{t('summary.system', { defaultValue: 'Sistema:' })} {wizard.sysDisk || '—'}</div>
             <div className="mt-1 text-[13px] text-slate-500 dark:text-text-muted">
               {wizard.diskProfile === 'raid'
-                ? `Membros: ${(wizard.selectedDisks || []).join(', ') || '—'}`
+                ? `${t('summary.members', { defaultValue: 'Membros:' })} ${(wizard.selectedDisks || []).join(', ') || '—'}`
                 : hasDedicatedData
-                  ? `Dados: ${wizard.dataDisk || '—'} -> /srv/data`
-                  : 'Dados: subvol interno no mesmo BTRFS (sem disco dedicado)'}
+                  ? `${t('summary.data', { defaultValue: 'Dados:' })} ${wizard.dataDisk || '—'} -> /srv/data`
+                  : t('summary.internal_subvol', { defaultValue: 'Dados: subvol interno no mesmo BTRFS (sem disco dedicado)' })}
             </div>
           </div>
           <div className="bg-white/50 dark:bg-bg-elevated/30 border border-slate-200/50 dark:border-white/5 rounded-xl p-4 shadow-sm transition-all hover:bg-white/80 dark:hover:bg-bg-elevated/50">
-            <div className="text-[10px] font-bold uppercase tracking-widest text-slate-500 dark:text-text-muted">Admin</div>
+            <div className="text-[10px] font-bold uppercase tracking-widest text-slate-500 dark:text-text-muted">{t('summary.admin', { defaultValue: 'Admin' })}</div>
             <div className="mt-2 text-sm font-semibold text-slate-900 dark:text-text-primary">{wizard.adminFullName || wizard.adminUser} ({wizard.adminUser})</div>
             <div className="mt-1 text-[13px] text-slate-600 dark:text-text-secondary">{wizard.adminEmail}</div>
-            <div className="mt-1 text-[13px] text-slate-500 dark:text-text-muted">{sshCount} chave(s) SSH</div>
+            <div className="mt-1 text-[13px] text-slate-500 dark:text-text-muted">{sshCount} {t('summary.ssh_keys', { defaultValue: 'chave(s) SSH' })}</div>
           </div>
         </div>
 
@@ -215,19 +214,19 @@ export default function Summary({ wizard, uiState, onChange, validation }) {
         <div className={`mt-4 rounded-2xl border p-4 text-sm ${srvDataActive ? 'border-emerald-400/20 bg-emerald-400/10 text-emerald-100' : 'border-slate-400/20 bg-slate-400/5 text-slate-300'}`}>
           <div className="font-bold flex items-center gap-2">
             <span>{srvDataActive ? '✓' : '○'}</span>
-            /srv/data {srvDataActive ? 'ativado' : 'não ativado'}
+            /srv/data {srvDataActive ? t('summary.activated', { defaultValue: 'ativado' }) : t('summary.not_activated', { defaultValue: 'não ativado' })}
           </div>
           <p className="mt-2">
             {srvDataActive
-              ? `Motivo: ${srvDataReason}. /srv/data será usado para dados de servidor, bancos, modelos, RAG, Neo4j, LightRAG e serviços persistentes.`
-              : `Motivo: ${srvDataReason}. Este perfil não requer volume de dados persistente separado.`}
+              ? `${t('summary.reason', { defaultValue: 'Motivo:' })} ${srvDataReason}. ${t('summary.srv_data_desc_active', { defaultValue: '/srv/data será usado para dados de servidor, bancos, modelos, RAG, Neo4j, LightRAG e serviços persistentes.' })}`
+              : `${t('summary.reason', { defaultValue: 'Motivo:' })} ${srvDataReason}. ${t('summary.srv_data_desc_inactive', { defaultValue: 'Este perfil não requer volume de dados persistente separado.' })}`}
           </p>
         </div>
 
         {/* Features separadas */}
         {systemFeatures.length > 0 && (
           <div className="mt-4 bg-white/50 dark:bg-bg-elevated/30 border border-slate-200/50 dark:border-white/5 rounded-xl p-4 shadow-sm">
-            <div className="text-[10px] font-bold uppercase tracking-widest text-slate-500 dark:text-text-muted">Features de Sistema</div>
+            <div className="text-[10px] font-bold uppercase tracking-widest text-slate-500 dark:text-text-muted">{t('summary.system_features', { defaultValue: 'Features de Sistema' })}</div>
             <div className="mt-2 flex flex-wrap gap-2">
               {systemFeatures.map(f => (
                 <span key={f.id} className="px-2.5 py-1 text-xs rounded-lg font-medium bg-blue-50 dark:bg-blue-500/15 text-blue-700 dark:text-blue-300 border border-blue-200 dark:border-blue-500/20">
@@ -239,7 +238,7 @@ export default function Summary({ wizard, uiState, onChange, validation }) {
         )}
         {homeFeatures.length > 0 && (
           <div className="mt-4 bg-white/50 dark:bg-bg-elevated/30 border border-slate-200/50 dark:border-white/5 rounded-xl p-4 shadow-sm">
-            <div className="text-[10px] font-bold uppercase tracking-widest text-slate-500 dark:text-text-muted">Features Home Manager</div>
+            <div className="text-[10px] font-bold uppercase tracking-widest text-slate-500 dark:text-text-muted">{t('summary.home_features', { defaultValue: 'Features Home Manager' })}</div>
             <div className="mt-2 flex flex-wrap gap-2">
               {homeFeatures.map(f => (
                 <span key={f.id} className="px-2.5 py-1 text-xs rounded-lg font-medium bg-purple-50 dark:bg-purple-500/15 text-purple-700 dark:text-purple-300 border border-purple-200 dark:border-purple-500/20">
@@ -251,34 +250,34 @@ export default function Summary({ wizard, uiState, onChange, validation }) {
         )}
 
         <div className="mt-5 rounded-xl border border-danger/20 bg-danger/5 dark:bg-danger/10 p-4 shadow-sm text-[13px] text-danger">
-          <div className="font-bold flex items-center gap-2"><span className="text-base">⚠</span> Plano final de disco com confirmação destrutiva</div>
-          <p className="mt-1">Os discos selecionados podem ser limpos e reformatados. Confira novamente sistema, dados, rede e usuário antes de prosseguir.</p>
+          <div className="font-bold flex items-center gap-2"><span className="text-base">⚠</span> {t('summary.destructive_plan', { defaultValue: 'Plano final de disco com confirmação destrutiva' })}</div>
+          <p className="mt-1">{t('summary.destructive_plan_desc', { defaultValue: 'Os discos selecionados podem ser limpos e reformatados. Confira novamente sistema, dados, rede e usuário antes de prosseguir.' })}</p>
         </div>
       </section>
 
       <section className="flex flex-col min-h-0 bg-white/50 dark:bg-bg-elevated/30 border border-slate-200/50 dark:border-white/5 rounded-2xl shadow-sm p-6 overflow-y-auto custom-scrollbar">
         <div>
           <div className="rounded-xl border border-slate-200/50 dark:border-white/10 bg-slate-50 dark:bg-slate-950/60 p-4">
-            <div className="text-[10px] font-bold uppercase tracking-widest text-slate-500 dark:text-text-muted">Checklist crítico</div>
+            <div className="text-[10px] font-bold uppercase tracking-widest text-slate-500 dark:text-text-muted">{t('summary.checklist', { defaultValue: 'Checklist crítico' })}</div>
             <ul className="mt-3 space-y-2 text-[13px] font-medium text-slate-600 dark:text-text-secondary">
-              <li>• EULA aceito: {uiState.eulaAccepted ? 'sim' : 'não'}</li>
-              <li>• Hostname: {wizard.hostName ? 'sim' : 'não'}</li>
-              <li>• Perfil selecionado: {wizard.profileId ? 'sim' : 'não'}</li>
-              <li>• Features sistema: {systemFeatures.length} ativadas</li>
-              <li>• Features usuário: {homeFeatures.length} ativadas</li>
-              <li>• /srv/data: {srvDataActive ? 'sim' : 'não'}</li>
-              <li>• Senha forte:{' '}
+              <li>• {t('summary.eula_accepted', { defaultValue: 'EULA aceito:' })} {uiState.eulaAccepted ? t('summary.yes', { defaultValue: 'sim' }) : t('summary.no', { defaultValue: 'não' })}</li>
+              <li>• {t('summary.hostname', { defaultValue: 'Hostname:' })} {wizard.hostName ? t('summary.yes', { defaultValue: 'sim' }) : t('summary.no', { defaultValue: 'não' })}</li>
+              <li>• {t('summary.profile_selected', { defaultValue: 'Perfil selecionado:' })} {wizard.profileId ? t('summary.yes', { defaultValue: 'sim' }) : t('summary.no', { defaultValue: 'não' })}</li>
+              <li>• {t('summary.system_features_count', { defaultValue: 'Features sistema:' })} {systemFeatures.length} {t('summary.activated_plural', { defaultValue: 'ativadas' })}</li>
+              <li>• {t('summary.user_features_count', { defaultValue: 'Features usuário:' })} {homeFeatures.length} {t('summary.activated_plural', { defaultValue: 'ativadas' })}</li>
+              <li>• /srv/data: {srvDataActive ? t('summary.yes', { defaultValue: 'sim' }) : t('summary.no', { defaultValue: 'não' })}</li>
+              <li>• {t('summary.strong_password', { defaultValue: 'Senha forte:' })} {' '}
                 {allowWeak
-                  ? 'ignorada por modo laboratório'
-                  : passwordStrong ? 'sim' : 'não'}
+                  ? t('summary.ignored_lab_mode', { defaultValue: 'ignorada por modo laboratório' })
+                  : passwordStrong ? t('summary.yes', { defaultValue: 'sim' }) : t('summary.no', { defaultValue: 'não' })}
               </li>
-              <li>• Senha confere: {passwordMatches ? 'sim' : 'não'}</li>
-              <li>• Plano destrutivo entendido: {uiState.destructiveConfirmed ? 'sim' : 'não'}</li>
+              <li>• {t('summary.password_match', { defaultValue: 'Senha confere:' })} {passwordMatches ? t('summary.yes', { defaultValue: 'sim' }) : t('summary.no', { defaultValue: 'não' })}</li>
+              <li>• {t('summary.destructive_understood', { defaultValue: 'Plano destrutivo entendido:' })} {uiState.destructiveConfirmed ? t('summary.yes', { defaultValue: 'sim' }) : t('summary.no', { defaultValue: 'não' })}</li>
             </ul>
 
             {allowWeak ? (
               <div className="mt-3 rounded-xl border border-amber-400/20 bg-amber-400/10 px-3 py-2 text-xs text-amber-100">
-                Modo laboratório ativo: regra de senha forte desativada. Não use este perfil para uso real.
+                {t('summary.lab_mode_warning', { defaultValue: 'Modo laboratório ativo: regra de senha forte desativada. Não use este perfil para uso real.' })}
               </div>
             ) : null}
             {validation?.warnings?.length > 0 ? (
@@ -301,10 +300,10 @@ export default function Summary({ wizard, uiState, onChange, validation }) {
             />
             <div className="flex flex-col">
               <span className={`text-[15px] font-bold ${uiState.destructiveConfirmed ? 'text-warning' : 'text-white'}`}>
-                Confirmo que este plano pode apagar dados
+                {t('summary.confirm_destructive', { defaultValue: 'Confirmo que este plano pode apagar dados' })}
               </span>
               <span className={`text-[13px] font-medium mt-1 ${uiState.destructiveConfirmed ? 'text-warning/80' : 'text-slate-400'}`}>
-                Entendo que os discos selecionados serão alterados irreversivelmente.
+                {t('summary.confirm_destructive_desc', { defaultValue: 'Entendo que os discos selecionados serão alterados irreversivelmente.' })}
               </span>
             </div>
           </label>
@@ -317,7 +316,7 @@ export default function Summary({ wizard, uiState, onChange, validation }) {
               className="rounded-xl border border-white/10 bg-white/5 px-4 py-3 text-sm text-white hover:bg-white/10 transition-colors"
               onClick={handleExportPlan}
             >
-              Exportar plano JSON
+              {t('summary.export_json', { defaultValue: 'Exportar plano JSON' })}
             </button>
             <label className="flex items-center rounded-xl border border-white/10 bg-white/5 px-4 py-3 text-sm text-white hover:bg-white/10 transition-colors cursor-pointer">
               <input
@@ -326,7 +325,7 @@ export default function Summary({ wizard, uiState, onChange, validation }) {
                 className="sr-only"
                 onChange={handleImportPlan}
               />
-              Importar plano JSON
+              {t('summary.import_json', { defaultValue: 'Importar plano JSON' })}
             </label>
           </div>
           {importError && (
@@ -335,7 +334,7 @@ export default function Summary({ wizard, uiState, onChange, validation }) {
             </div>
           )}
           <div className="flex-1 rounded-xl border border-cyan-400/20 bg-cyan-400/10 p-4 text-sm text-cyan-50">
-            A próxima etapa gera o plano via backend e permite iniciar a instalação com logs ao vivo.
+            {t('summary.next_step_desc', { defaultValue: 'A próxima etapa gera o plano via backend e permite iniciar a instalação com logs ao vivo.' })}
           </div>
         </div>
       </section>

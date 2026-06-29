@@ -1,7 +1,10 @@
 import React from 'react';
+import { useTranslation } from 'react-i18next';
 import { PROFILE_CATALOG, getFeaturesForProfile } from '../data/profileCatalog.js';
 
 export default function Profile({ wizard, onChange }) {
+  const { t } = useTranslation();
+
   const handleProfileSelect = (profileId) => {
     const defaultFeatures = getFeaturesForProfile(profileId);
     onChange({ 
@@ -12,9 +15,9 @@ export default function Profile({ wizard, onChange }) {
 
   return (
     <div className="wizard-content">
-      <h2 className="text-2xl font-bold mb-4">Perfil de Sistema</h2>
+      <h2 className="text-2xl font-bold mb-4">{t('machine_profile.title', { defaultValue: 'Perfil de Sistema' })}</h2>
       <p className="text-gray-400 mb-8">
-        Escolha um perfil para pré-carregar as features recomendadas para o seu caso de uso.
+        {t('machine_profile.desc', { defaultValue: 'Escolha um perfil para pré-carregar as features recomendadas para o seu caso de uso.' })}
       </p>
 
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">

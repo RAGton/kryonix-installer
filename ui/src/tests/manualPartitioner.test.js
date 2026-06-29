@@ -1,72 +1,84 @@
-import { describe, it, expect } from 'vitest';
+import { test } from 'node:test';
+import * as assert from 'node:assert';
 import { parseSizeInput, validateProposedLayout } from '../utils/layoutAssistant.js';
 
-describe('layoutAssistant - parseSizeInput', () => {
+test('layoutAssistant - parseSizeInput: parses raw numbers correctly', () => {
   const MiB = 1024 * 1024;
   const GiB = MiB * 1024;
   const total = 100 * GiB;
   const free = 20 * GiB;
-
-  it('parses raw numbers correctly', () => {
-    expect(parseSizeInput('1000', total, free)).toBe(1000);
-  });
-
-  it('parses GiB, MiB correctly', () => {
-    expect(parseSizeInput('10GiB', total, free)).toBe(10 * GiB);
-    expect(parseSizeInput('500MiB', total, free)).toBe(500 * MiB);
-    expect(parseSizeInput('2.5GiB', total, free)).toBe(Math.floor(2.5 * GiB));
-  });
-
-  it('parses percentages based on total', () => {
-    expect(parseSizeInput('10%', total, free)).toBe(10 * GiB);
-    expect(parseSizeInput('50%', total, free)).toBe(50 * GiB);
-  });
-
-  it('parses resto / restante based on free bytes', () => {
-    expect(parseSizeInput('resto', total, free)).toBe(free);
-    expect(parseSizeInput('restante', total, free)).toBe(free);
-  });
-
-  it('handles invalid inputs safely', () => {
-    expect(parseSizeInput('invalid', total, free)).toBe(0);
-    expect(parseSizeInput('', total, free)).toBe(0);
-    expect(parseSizeInput('-100', total, free)).toBe(0);
-  });
+  assert.strictEqual(parseSizeInput('1000', total, free), 1000);
 });
 
-describe('layoutAssistant - validateProposedLayout', () => {
-  it('fails if no root partition is defined', () => {
-    const layout = {
-      partitions: [
-        { mountpoint: '/boot/efi', sizeBytes: 512 * 1024 * 1024 }
-      ]
-    };
-    const result = validateProposedLayout(layout);
-    expect(result.valid).toBe(false);
-    expect(result.blockingReasons).toContain('Nenhuma partição root (/) definida.');
-  });
+test('layoutAssistant - parseSizeInput: parses GiB, MiB correctly', () => {
+  const MiB = 1024 * 1024;
+  const GiB = MiB * 1024;
+  const total = 100 * GiB;
+  const free = 20 * GiB;
+  assert.strictEqual(parseSizeInput('10GiB', total, free), 10 * GiB);
+  assert.strictEqual(parseSizeInput('500MiB', total, free), 500 * MiB);
+  assert.strictEqual(parseSizeInput('2.5GiB', total, free), Math.floor(2.5 * GiB));
+});
 
-  it('fails if root partition is too small', () => {
-    const layout = {
-      partitions: [
-        { mountpoint: '/boot/efi', sizeBytes: 512 * 1024 * 1024 },
-        { mountpoint: '/', sizeBytes: 10 * 1024 * 1024 * 1024 } // 10GiB < 20GiB
-      ]
-    };
-    const result = validateProposedLayout(layout);
-    expect(result.valid).toBe(false);
-    expect(result.blockingReasons[0]).toMatch(/mínimo exigido/);
-  });
+test('layoutAssistant - parseSizeInput: parses percentages based on total', () => {
+  const MiB = 1024 * 1024;
+  const GiB = MiB * 1024;
+  const total = 100 * GiB;
+  const free = 20 * GiB;
+  assert.strictEqual(parseSizeInput('10%', total, free), 10 * GiB);
+  assert.strictEqual(parseSizeInput('50%', total, free), 50 * GiB);
+});
 
-  it('passes for valid layouts', () => {
-    const layout = {
-      partitions: [
-        { mountpoint: '/boot/efi', sizeBytes: 512 * 1024 * 1024 },
-        { mountpoint: '/', sizeBytes: 25 * 1024 * 1024 * 1024 } // 25GiB
-      ]
-    };
-    const result = validateProposedLayout(layout);
-    expect(result.valid).toBe(true);
-    expect(result.blockingReasons.length).toBe(0);
-  });
+test('layoutAssistant - parseSizeInput: parses resto / restante based on free bytes', () => {
+  const MiB = 1024 * 1024;
+  const GiB = MiB * 1024;
+  const total = 100 * GiB;
+  const free = 20 * GiB;
+  assert.strictEqual(parseSizeInput('resto', total, free), free);
+  assert.strictEqual(parseSizeInput('restante', total, free), free);
+});
+
+test('layoutAssistant - parseSizeInput: handles invalid inputs safely', () => {
+  const MiB = 1024 * 1024;
+  const GiB = MiB * 1024;
+  const total = 100 * GiB;
+  const free = 20 * GiB;
+  assert.strictEqual(parseSizeInput('invalid', total, free), 0);
+  assert.strictEqual(parseSizeInput('', total, free), 0);
+  assert.strictEqual(parseSizeInput('-100', total, free), 0);
+});
+
+test('layoutAssistant - validateProposedLayout: fails if no root partition is defined', () => {
+  const layout = {
+    partitions: [
+      { mountpoint: '/boot/efi', sizeBytes: 512 * 1024 * 1024 }
+    ]
+  };
+  const result = validateProposedLayout(layout);
+  assert.strictEqual(result.valid, false);
+  assert.ok(result.blockingReasons.includes('Nenhuma partição root (/) definida.'));
+});
+
+test('layoutAssistant - validateProposedLayout: fails if root partition is too small', () => {
+  const layout = {
+    partitions: [
+      { mountpoint: '/boot/efi', sizeBytes: 512 * 1024 * 1024 },
+      { mountpoint: '/', sizeBytes: 10 * 1024 * 1024 * 1024 } // 10GiB < 20GiB
+    ]
+  };
+  const result = validateProposedLayout(layout);
+  assert.strictEqual(result.valid, false);
+  assert.ok(/mínimo exigido/.test(result.blockingReasons[0]));
+});
+
+test('layoutAssistant - validateProposedLayout: passes for valid layouts', () => {
+  const layout = {
+    partitions: [
+      { mountpoint: '/boot/efi', sizeBytes: 512 * 1024 * 1024 },
+      { mountpoint: '/', sizeBytes: 25 * 1024 * 1024 * 1024 } // 25GiB
+    ]
+  };
+  const result = validateProposedLayout(layout);
+  assert.strictEqual(result.valid, true);
+  assert.strictEqual(result.blockingReasons.length, 0);
 });

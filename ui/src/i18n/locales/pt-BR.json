@@ -368,5 +368,34 @@
     "title": "Identificação",
     "subtitle": "Qual será o nome da máquina (hostname) na rede?",
     "input_placeholder": "Ex: meu-desktop, servidor-01"
+  },
+  "partitioning": {
+    "manual": {
+      "title": "Particionamento manual",
+      "newPartition": "Nova partição",
+      "disk": "Disco",
+      "size": "Tamanho",
+      "usage": "Uso",
+      "filesystem": "Sistema de arquivos",
+      "label": "Rótulo (label)",
+      "mountpoint": "Ponto de montagem",
+      "action": "Ação",
+      "fullyAllocated": "Disco totalmente alocado",
+      "freeSpace": "Espaço livre",
+      "allocated": "Alocado",
+      "realDiskSizeUnavailable": "O tamanho real do disco não foi detectado. Não é seguro continuar com o particionamento manual.",
+      "allocationExceeded": "O disco {{disk}} possui {{diskSize}}, mas foram alocados {{allocatedSize}}. Excesso: {{excessSize}}.",
+      "swapDoesNotUseMountpoint": "Swap não usa ponto de montagem.",
+      "rootRequired": "A partição raiz / é obrigatória.",
+      "efiRequired": "Em modo UEFI, uma partição EFI é obrigatória.",
+      "efiMustBeFat32": "A partição EFI precisa usar FAT32.",
+      "duplicateLabel": "Há rótulos duplicados neste disco.",
+      "empty": "Nenhuma partição configurada. Clique em Nova partição.",
+      "noPartition": "Nenhuma partição definida",
+      "duplicateMountpoints": "Existem pontos de montagem duplicados",
+      "custom": "Personalizado",
+      "data": "Dados",
+      "restOfDisk": "Restante do disco"
+    }
   }
 }

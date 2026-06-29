@@ -368,5 +368,34 @@
     "title": "Identification",
     "subtitle": "What will be the machine's name (hostname) on the network?",
     "input_placeholder": "E.g.: my-desktop, server-01"
+  },
+  "partitioning": {
+    "manual": {
+      "title": "Manual partitioning",
+      "newPartition": "New partition",
+      "disk": "Disk",
+      "size": "Size",
+      "usage": "Usage",
+      "filesystem": "Filesystem",
+      "label": "Label",
+      "mountpoint": "Mountpoint",
+      "action": "Action",
+      "fullyAllocated": "Disk fully allocated",
+      "freeSpace": "Free space",
+      "allocated": "Allocated",
+      "realDiskSizeUnavailable": "Real disk size was not detected. It is not safe to proceed with manual partitioning.",
+      "allocationExceeded": "Disk {{disk}} has {{diskSize}}, but {{allocatedSize}} were allocated. Excess: {{excessSize}}.",
+      "swapDoesNotUseMountpoint": "Swap does not use a mountpoint.",
+      "rootRequired": "Root partition / is required.",
+      "efiRequired": "In UEFI mode, an EFI partition is required.",
+      "efiMustBeFat32": "EFI partition must use FAT32.",
+      "duplicateLabel": "There are duplicate labels on this disk.",
+      "empty": "No partition configured. Click New partition.",
+      "noPartition": "No partition defined",
+      "duplicateMountpoints": "There are duplicate mountpoints",
+      "custom": "Custom",
+      "data": "Data",
+      "restOfDisk": "Rest of disk"
+    }
   }
 }

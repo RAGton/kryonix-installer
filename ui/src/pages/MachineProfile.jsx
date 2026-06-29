@@ -1,8 +1,11 @@
 import React from 'react';
+import { useTranslation } from 'react-i18next';
 import { PROFILE_CATALOG, getFeaturesForProfile } from '../data/profileCatalog.js';
 import { FEATURE_CATALOG } from '../data/featureCatalog.js';
 
 export default function MachineProfile({ wizard, onChange }) {
+  const { t } = useTranslation();
+
   const handleProfileSelect = (profileId) => {
     const defaultFeatures = getFeaturesForProfile(profileId);
     onChange({
@@ -15,12 +18,12 @@ export default function MachineProfile({ wizard, onChange }) {
   const activeFeatures = activeProfile ? getFeaturesForProfile(activeProfile.id) : [];
 
   const srvDataStatus = (profile) => {
-    if (profile.enableSrvData) return { label: 'Obrigatório', color: 'text-emerald-400', bg: 'bg-emerald-400/10', border: 'border-emerald-400/30' };
-    if (profile.srvDataRecommended) return { label: 'Recomendado', color: 'text-amber-400', bg: 'bg-amber-400/10', border: 'border-amber-400/30' };
-    return { label: 'Não ativado', color: 'text-slate-500', bg: 'bg-slate-500/10', border: 'border-slate-500/30' };
+    if (profile.enableSrvData) return { label: t('machine_profile.srv_required', { defaultValue: 'Obrigatório' }), color: 'text-emerald-400', bg: 'bg-emerald-400/10', border: 'border-emerald-400/30' };
+    if (profile.srvDataRecommended) return { label: t('machine_profile.srv_recommended', { defaultValue: 'Recomendado' }), color: 'text-amber-400', bg: 'bg-amber-400/10', border: 'border-amber-400/30' };
+    return { label: t('machine_profile.srv_not_enabled', { defaultValue: 'Não ativado' }), color: 'text-slate-500', bg: 'bg-slate-500/10', border: 'border-slate-500/30' };
   };
 
-  const modeLabel = (mode) => mode === 'desktop' ? 'Desktop' : 'Server';
+  const modeLabel = (mode) => mode === 'desktop' ? t('machine_profile.mode_desktop', { defaultValue: 'Desktop' }) : t('machine_profile.mode_server', { defaultValue: 'Server' });
 
   const getFeatureStats = (profileId) => {
     const features = getFeaturesForProfile(profileId);
@@ -34,7 +37,7 @@ export default function MachineProfile({ wizard, onChange }) {
     <div className="wizard-content space-y-6 h-full overflow-y-auto min-h-0 pb-4 pr-2 custom-scrollbar">
 
       <div className="rounded-2xl border border-blue-500/20 bg-blue-500/5 p-4 text-sm text-blue-200">
-        <span className="font-bold">Este perfil influencia:</span> features de sistema, features de usuário, layout de disco, ativação de /srv/data e serviços instalados.
+        <span className="font-bold">{t('machine_profile.influence_notice', { defaultValue: 'Este perfil influencia:' })}</span> {t('machine_profile.influence_details', { defaultValue: 'features de sistema, features de usuário, layout de disco, ativação de /srv/data e serviços instalados.' })}
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
@@ -84,9 +87,9 @@ export default function MachineProfile({ wizard, onChange }) {
               </div>
 
               <div className="flex gap-3 text-xs text-gray-500">
-                <span>{stats.count} features</span>
-                {stats.totalDisk > 0 && <span>{stats.totalDisk} GB disco</span>}
-                {stats.maxRam > 0 && <span>min {stats.maxRam} GB RAM</span>}
+                <span>{stats.count} {t('machine_profile.stats_features', { defaultValue: 'features' })}</span>
+                {stats.totalDisk > 0 && <span>{stats.totalDisk} {t('machine_profile.stats_disk', { defaultValue: 'GB disco' })}</span>}
+                {stats.maxRam > 0 && <span>{t('machine_profile.stats_ram_min', { defaultValue: 'min' })} {stats.maxRam} {t('machine_profile.stats_ram', { defaultValue: 'GB RAM' })}</span>}
               </div>
             </button>
           );
@@ -96,7 +99,7 @@ export default function MachineProfile({ wizard, onChange }) {
       {activeProfile && activeFeatures.length > 0 && (
         <div className="rounded-2xl border border-white/10 bg-white/[0.03] p-5">
           <h3 className="text-sm font-bold uppercase tracking-wider text-slate-400 mb-3">
-            Features incluídas no perfil «{activeProfile.name}»
+            {t('machine_profile.features_included', { defaultValue: 'Features incluídas no perfil' })} «{activeProfile.name}»
           </h3>
           <div className="flex flex-wrap gap-2">
             {activeFeatures.map(featId => {
@@ -123,7 +126,7 @@ export default function MachineProfile({ wizard, onChange }) {
 
       {activeProfile && activeFeatures.length === 0 && (
         <div className="rounded-2xl border border-white/10 bg-white/[0.03] p-5 text-sm text-gray-400">
-          Perfil Custom — você escolherá cada feature manualmente nas próximas etapas.
+          {t('machine_profile.custom_notice', { defaultValue: 'Perfil Custom — você escolherá cada feature manualmente nas próximas etapas.' })}
         </div>
       )}
     </div>
