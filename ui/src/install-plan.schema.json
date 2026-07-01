@@ -146,6 +146,12 @@
     "features": {
       "type": "object"
     },
+    "confirmedFeatures": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
     "storage": {
       "type": "object",
       "additionalProperties": false,
