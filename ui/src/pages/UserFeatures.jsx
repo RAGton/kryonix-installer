@@ -1,7 +1,9 @@
 import React from 'react';
+import { useTranslation } from 'react-i18next';
 import { FEATURE_CATALOG } from '../data/featureCatalog.js';
 
 export default function UserFeatures({ wizard, onChange }) {
+  const { t } = useTranslation();
   const userFeatures = FEATURE_CATALOG.filter(f => f.level === 'user');
   const domains = [...new Set(userFeatures.map(f => f.domain))];
 
@@ -59,7 +61,7 @@ export default function UserFeatures({ wizard, onChange }) {
                           <div className="flex gap-2">
                             {feature.status === 'partial' && (
                               <span className="px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-widest rounded border border-amber-500/30 bg-amber-500/10 text-amber-400">
-                                Partial
+                                {t('common.partial')}
                               </span>
                             )}
                             {isBlocked && (

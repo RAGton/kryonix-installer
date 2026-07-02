@@ -250,7 +250,8 @@
     "ready": "Pronto",
     "failed": "Falhou",
     "yes": "Sim",
-    "no": "Não"
+    "no": "Não",
+    "partial": "Parcial"
   },
   "eula": {
     "title": "Contrato e Avisos",
