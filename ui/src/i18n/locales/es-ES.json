@@ -250,7 +250,8 @@
     "ready": "Listo",
     "failed": "Falló",
     "yes": "Sí",
-    "no": "No"
+    "no": "No",
+    "partial": "Parcial"
   },
   "eula": {
     "title": "EULA y Avisos",

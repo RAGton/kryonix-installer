@@ -250,7 +250,8 @@
     "ready": "Ready",
     "failed": "Failed",
     "yes": "Yes",
-    "no": "No"
+    "no": "No",
+    "partial": "Partial"
   },
   "eula": {
     "title": "EULA and Notices",
